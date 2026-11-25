@@ -40,6 +40,9 @@ SYSTEM = """당신은 촉한의 승상 제갈량(諸葛亮, 자 孔明)입니다
 - 의례적인 인사·맺음말·출사표 흉내·같은 비유의 반복은 쓰지 마십시오. 곧바로 본론.
 - 핵심을 고르는 순서: ① 막힌 문제(코딩·일상) → ② 진행 중인 코딩 일의 다음 한 걸음 → ③ 오늘 기분·마음 → ④ '1년 뒤 나에게'와 연결.
   '1년 뒤 나에게'·'늘 곁에 둘 글'은 방향을 확인하는 나침반입니다. 매일 그 내용을 다시 읊지 말고, 오늘 핵심이 그 방향과 어긋나거나 맞닿을 때만 한 줄로 이으십시오.
+- 군령(today_task): '군령 장부'에서 **체크 안 된 군령은 다시 내려도 됩니다**(주공이 아직 못 한 일). 가장 중요한 것 하나는 그대로 또는 더 작게 쪼개 다시 내리십시오.
+  체크된(해낸) 군령은 되풀이하지 말고 그다음 단계를 내리십시오. 해낸 일이 있으면 salutation 에서 짧게 알아주어도 좋습니다.
+- 위키의 '어제보다 나은 오늘' 폴더(1년 뒤 나에게·오늘 기분·막힌 일·진행 중)는 주공이 상소를 위해 따로 적는 곳이니 가장 먼저 보십시오.
 - 오늘 기분이 위키에 적혀 있으면 salutation 한 문장으로 그 마음을 먼저 알아주십시오(훈계 금지).
 
 [말투]
@@ -106,8 +109,11 @@ SYSTEM = """당신은 촉한의 승상 제갈량(諸葛亮, 자 孔明)입니다
 
 USER = """오늘은 {today}입니다.
 
-[지난 상소 — 여기 있는 주제·군령·구절·사자성어는 되풀이 금지]
+[지난 상소 — 여기 있는 주제·구절·사자성어는 되풀이 금지]
 {recent}
+
+[군령 장부 — 주공이 상소 화면이나 위키에서 체크한 결과]
+{orders}
 
 [주공의 위키 — 지난 상소 이후 새로 생기거나 바뀐 것 (가장 중요한 재료)]
 {wiki}
@@ -129,11 +135,11 @@ USER = """오늘은 {today}입니다.
 """
 
 
-def build(today: date, nth: int, profile: str, recent: str, wiki: str, cc_new: str, cc_old: str,
+def build(today: date, nth: int, profile: str, recent: str, orders: str, wiki: str, cc_new: str, cc_old: str,
           ai_history: str, max_chars: int) -> tuple[str, str]:
     weekday = "월화수목금토일"[today.weekday()]
     system = SYSTEM.format(max_chars=max_chars)
-    user = USER.format(today=f"{today:%Y년 %m월 %d일} ({weekday}요일)", recent=recent, wiki=wiki,
+    user = USER.format(today=f"{today:%Y년 %m월 %d일} ({weekday}요일)", recent=recent, orders=orders, wiki=wiki,
                        cc_new=cc_new, cc_old=cc_old, ai_history=ai_history, profile=profile,
                        tip=tip_for(nth))
     return system, user

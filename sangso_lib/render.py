@@ -27,7 +27,7 @@ from .engine import count_chars, count_points
 log = logging.getLogger("sangso")
 
 # 화면(템플릿·court.js) 버전. 화면 오른쪽 아래에 작게 보입니다 → "내 화면이 최신인가?"를 확인하는 용도
-UI_VERSION = "2026.11.25"
+UI_VERSION = "2026.11.25b"
 
 STEMS, BRANCHES = "甲乙丙丁戊己庚辛壬癸", "子丑寅卯辰巳午未申酉戌亥"
 
@@ -182,8 +182,9 @@ def _app_browser() -> str | None:
     return next((str(c) for c in cands if c.is_file()), None)
 
 
-def open_window(path: Path) -> None:
-    url = path.resolve().as_uri()
+def open_window(path: Path, url: str | None = None) -> None:
+    """url 을 주면(서기가 켜진 경우 http://127.0.0.1:…) 그 주소로, 아니면 파일로 엽니다."""
+    url = url or path.resolve().as_uri()
     exe = _app_browser()
     if exe:
         try:

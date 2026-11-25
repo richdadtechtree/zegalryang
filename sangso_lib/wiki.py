@@ -11,6 +11,9 @@ wiki.py — 주공의 위키(마크다운 노트 폴더)를 읽어 '지난 상�
   ② 바뀐 파일                 → 새로 추가·수정된 줄만
   ③ '늘 곁에 둘' 파일(pinned) → 바뀌지 않았어도 짧게 요약용으로 (예: '1년 뒤 나에게')
      config.json 의 wiki_pinned 에 파일·폴더 이름의 일부를 적으면 됩니다.
+  • wiki_focus(기본 '어제보다 나은 오늘' 폴더)에 든 것은 ①②③ 안에서 맨 앞에 둡니다.
+  • wiki_low(기본 '건강/운동 기록')처럼 매일 쌓이는 기록은 맨 뒤에, 가장 최근 1개만 짧게.
+  • 군령 파일(orders_file)은 프로그램이 직접 적는 파일이라 여기서 읽지 않습니다(군령 장부로 따로 넘김).
 
 디버깅 힌트
   - "위키 폴더를 찾지 못함" → config.json 의 wiki_dir 에 전체 경로를 적으세요.
@@ -125,7 +128,7 @@ def save_snapshot(archive: Path, today: date, snap: dict) -> None:
 def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
     """(제갈량에게 넘길 글, 오늘의 사진, 통계)를 돌려줍니다. 위키가 없으면 빈 글."""
     root = find_dir(cfg.get("wiki_dir", ""))
-    stats = {"dir": str(root) if root else "", "new": 0, "changed": 0, "pinned": 0}
+    stats = {"dir": str(root) if root else "", "new": 0, "changed": 0, "pinned": 0, "low": 0}
     if not root:
         return "(위키 폴더 없음 — config.json 의 wiki_dir 에 경로를 적으면 함께 읽습니다)", {}, stats
 
@@ -133,35 +136,53 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
     budget = int(cfg.get("wiki_max_chars", 30000))
     since = datetime.now() - timedelta(days=int(cfg.get("wiki_days", 14)))
     pinned_keys = [k.lower() for k in cfg.get("wiki_pinned", []) if k]
+    focus_keys = [k.lower() for k in cfg.get("wiki_focus", ["어제보다 나은 오늘"]) if k]
+    low_keys = [k.lower() for k in cfg.get("wiki_low", ["건강/운동 기록"]) if k]
+    orders_rel = str(cfg.get("orders_file", "어제보다 나은 오늘/군령.md")).replace("\\", "/").lower()
+    low_blocks: list[str] = []
 
     snap, new_blocks, changed_blocks, pinned_blocks = {}, [], [], []
     # 최근에 고친 파일부터 → 예산이 모자라면 오래된 것이 빠집니다
     for p in sorted(_files(root), key=lambda f: f.stat().st_mtime, reverse=True):
         rel = p.relative_to(root).as_posix()
+        if rel.lower() == orders_rel:
+            continue
         text = _read(p)
         digest = hashlib.sha1(text.encode("utf-8")).hexdigest()
         mtime = datetime.fromtimestamp(p.stat().st_mtime)
         snap[rel] = {"sha": digest, "text": text}
         when = f"{mtime:%m-%d %H:%M}"
         old = prev.get(rel)
+        is_focus = any(k in rel.lower() for k in focus_keys)
+        is_low = any(k in rel.lower() for k in low_keys)
+
+        def put(blocks: list, block: str) -> None:
+            if is_low:                      # 매일 쌓이는 기록: 가장 최근 것 1개만
+                if not low_blocks:
+                    low_blocks.append(block[:800])
+            elif is_focus:
+                blocks.insert(sum(1 for b in blocks if "★" in b), block.replace("### [", "### ★[", 1))
+            else:
+                blocks.append(block)
 
         if old is None:
             # 첫 실행이면 최근 wiki_days 안에 고친 것만 '새 것'으로 칩니다 (위키 전체가 쏟아지지 않게)
             if prev_day is None and mtime < since:
                 pass
             elif text.strip():
-                new_blocks.append(f"### [새 파일] {rel} ({when})\n{_clip(text)}")
+                put(new_blocks, f"### [새 파일] {rel} ({when})\n{_clip(text)}")
                 continue
         elif old.get("sha") != digest:
             added = _added_lines(old.get("text", ""), text)
             if added:
-                changed_blocks.append(f"### [바뀐 줄] {rel} ({when})\n{_clip(added)}")
+                put(changed_blocks, f"### [바뀐 줄] {rel} ({when})\n{_clip(added)}")
                 continue
         if pinned_keys and any(k in rel.lower() for k in pinned_keys) and text.strip():
-            pinned_blocks.append(f"### [늘 곁에 둘 글] {rel} (바뀌지 않음 — 방향 확인용)\n{_clip(text, 1200)}")
+            put(pinned_blocks, f"### [늘 곁에 둘 글] {rel} (바뀌지 않음 — 방향 확인용)\n{_clip(text, 1200)}")
 
     out, used = [], 0
-    for kind, blocks in (("new", new_blocks), ("changed", changed_blocks), ("pinned", pinned_blocks)):
+    for kind, blocks in (("new", new_blocks), ("changed", changed_blocks), ("pinned", pinned_blocks),
+                         ("low", low_blocks)):
         for b in blocks:
             if used + len(b) > budget:
                 break
@@ -169,7 +190,8 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
             used += len(b)
             stats[kind] += 1
 
-    head = (f"(지난 상소 때 읽은 위키: {prev_day} 기준. 아래는 그 뒤로 새로 생기거나 바뀐 것만입니다)"
+    head = ("(★ 표시는 주공이 상소를 위해 적는 '어제보다 나은 오늘' 폴더 — 가장 먼저 보십시오)\n"
+            if any("★" in b for b in out) else "") + (f"(지난 상소 때 읽은 위키: {prev_day} 기준. 아래는 그 뒤로 새로 생기거나 바뀐 것만입니다)"
             if prev_day else "(위키를 처음 읽습니다. 최근에 고친 파일만 담았습니다)")
     body = "\n\n".join(out) if out else "(지난 상소 이후 위키에 새로 적힌 것 없음)"
     log.info("위키 %s: 새 파일 %d, 바뀐 파일 %d, 늘 곁에 둘 글 %d", root, stats["new"], stats["changed"], stats["pinned"])

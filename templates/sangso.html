@@ -118,6 +118,8 @@ p { margin: 0 0 1.1em; }
 .point h3::before { display: none; }
 .point .basis { font-size: 13px; color: var(--ink-soft); margin: -4px 0 0; }
 .opening.off, .closing.off { display: none; }
+.order-sync { margin: 4px 0 0; font-size: 13px; color: var(--ink-soft); }
+.order-sync.bad { color: var(--cinnabar); }
 body.vertical .point { margin: 0 34px 0 0; }
 
 /* ── 오늘의 군령 + 오늘의 한 구절 ─────────────────────── */
@@ -353,6 +355,7 @@ body.vertical .notice { margin: 0 0 0 24px; }
         <h4>오늘 하루, 신이 청하옵는 두 가지 일 — 마치시면 눌러 표시하소서</h4>
         <label class="order"><input type="checkbox" data-k="cc"><span class="txt"><span class="tag">道具</span>$task_cc</span></label>
         <label class="order"><input type="checkbox" data-k="life"><span class="txt"><span class="tag">大業</span>$task_life</span></label>
+        <p class="order-sync" id="order-sync"></p>
         <p class="motto-meaning">$motto_meaning</p>
       </div>
       <div class="motto" aria-label="오늘의 한 구절">
@@ -391,12 +394,33 @@ body.vertical .notice { margin: 0 0 0 24px; }
   function load(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 
-  // 1) 군령 체크 상태를 날짜별로 기억
-  var done = load(KEY, {});
-  document.querySelectorAll(".order input").forEach(function (box) {
+  // 1) 군령 체크 → 위키의 군령 파일에 반영
+  //    python sangso.py 로 열면 이 컴퓨터의 '서기'(127.0.0.1)를 거쳐 위키에 [x] 가 적힙니다.
+  //    그렇게 열지 않은 화면(파일로 직접 연 것, 휴대폰)에서는 이 브라우저에만 기억합니다.
+  var done = load(KEY, {}), DATE = "$date_iso";
+  var boxes = document.querySelectorAll(".order input"), sync = document.getElementById("order-sync");
+  var clerk = location.protocol === "http:" && location.hostname === "127.0.0.1";
+  function note(t, bad) { if (sync) { sync.textContent = t; sync.classList.toggle("bad", !!bad); } }
+  boxes.forEach(function (box) {
     box.checked = !!done[box.dataset.k];
-    box.addEventListener("change", function () { done[box.dataset.k] = box.checked; save(KEY, done); });
+    box.addEventListener("change", function () {
+      done[box.dataset.k] = box.checked; save(KEY, done);
+      if (!clerk) return;
+      fetch("/api/check", { method: "POST", headers: { "Content-Type": "application/json", "X-Sangso": "1" },
+                            body: JSON.stringify({ date: DATE, key: box.dataset.k, done: box.checked }) })
+        .then(function (r) { if (!r.ok) throw 0; note("✓ 위키 군령 파일에 적었사옵니다"); })
+        .catch(function () { note("위키에 적지 못했사옵니다 — python sangso.py 로 다시 열어 주시옵소서", true); });
+    });
   });
+  if (clerk) {
+    // 옵시디언에서 직접 체크한 것도 화면에 보이게, 파일의 상태를 먼저 읽어 옵니다
+    fetch("/api/checks?date=" + DATE).then(function (r) { return r.json(); }).then(function (st) {
+      boxes.forEach(function (box) { if (box.dataset.k in st) box.checked = !!st[box.dataset.k]; });
+      note("체크하시면 위키 군령 파일에 바로 적힙니다");
+    }).catch(function () { note("서기가 꺼져 있어 위키에 적히지 않사옵니다 — python sangso.py 로 다시 열어 주시옵소서", true); });
+  } else {
+    note("이 화면에서의 체크는 이 브라우저에만 남사옵니다 (위키 반영은 노트북에서 python sangso.py 로 연 화면에서)", true);
+  }
 
   // 2) 글자 크기
   var fs = load("sangso:fs", 18);
