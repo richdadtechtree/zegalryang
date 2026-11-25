@@ -102,7 +102,7 @@ def write_today(today: date, cfg: dict) -> tuple[Path, str]:
         nth=len([f for f in ARCHIVE.glob("????-??-??.json") if f.stem != today.isoformat()]),
         profile=collect.read_profile(BASE),
         recent=collect.read_recent_sangso(ARCHIVE),
-        orders=orders.pending_text(orders.orders_path(BASE, cfg), today),
+        orders=orders.pending_text(orders.store_for(BASE, cfg), today),
         wiki=wiki_text,
         cc_new=collect.format_items(cc_new),
         cc_old=collect.format_items(cc_old),
@@ -116,9 +116,10 @@ def write_today(today: date, cfg: dict) -> tuple[Path, str]:
 
     (ARCHIVE / f"{today.isoformat()}.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    # 오늘 군령 2개를 위키의 군령 파일에 '체크 안 됨'으로 적어 둡니다 (화면에서 체크하면 [x] 로 바뀜)
+    # 오늘 군령 2개를 군령 장부(깃허브 위키 또는 노트북 위키)에 '체크 안 됨'으로 적어 둡니다
+    # → 웹앱·상소 화면·뮤즈 앱·옵시디언 어디서 체크해도 [x] 로 바뀜
     try:
-        orders.add_day(orders.orders_path(BASE, cfg), today.isoformat(), data.get("today_task") or {})
+        orders.add_day(orders.store_for(BASE, cfg), today.isoformat(), data.get("today_task") or {})
     except OSError as e:
         log.warning("군령 파일에 적지 못함: %s", e)
     if wiki_snap:   # 상소를 다 쓴 뒤에만 위키 사진을 남깁니다 → 내일은 이 사진 이후 바뀐 것만 읽음
@@ -137,6 +138,7 @@ def main() -> int:
     ap.add_argument("--publish-setup", action="store_true", help="처음 한 번: Cloudflare 올리기 설정")
     ap.add_argument("--publish", action="store_true", help="지금 바로 Cloudflare 에 올린다")
     ap.add_argument("--publish-password", action="store_true", help="비밀번호 문 만들기/바꾸기")
+    ap.add_argument("--github-setup", action="store_true", help="군령을 깃허브 위키(my-wiki)에 바로 적도록 토큰 등록")
     ap.add_argument("--clerk", action="store_true", help="(자동으로 쓰임) 군령 체크를 위키에 적는 서기를 켠다")
     ap.add_argument("--check", action="store_true", help="점검: 화면 버전과 인물별 초상화 파일을 보여 준다")
     ap.add_argument("--update", action="store_true", help="GitHub의 최신 프로그램으로 새로 고친다 (내 기록·설정·그림은 그대로)")
@@ -144,6 +146,8 @@ def main() -> int:
     args = ap.parse_args()
 
     setup_logging()
+    if args.github_setup:
+        return orders.github_setup(BASE, load_config())
     if args.clerk:
         orders.serve(BASE, load_config())
         return 0
@@ -154,7 +158,7 @@ def main() -> int:
         print(art.report(BASE / "assets"))
         w = wiki.find_dir(load_config().get("wiki_dir", ""))
         print(f"위키 폴더: {w or '못 찾음 — config.json 의 wiki_dir 에 경로를 적으세요'}")
-        print(f"군령 파일: {orders.orders_path(BASE, load_config())}")
+        print(f"군령 장부: {orders.store_for(BASE, load_config()).where}")
         return 0
     if args.publish_setup or args.publish or args.publish_password:
         from sangso_lib import publish
