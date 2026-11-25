@@ -177,6 +177,7 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
     low_keys = [k.lower() for k in cfg.get("wiki_low", ["건강/운동 기록"]) if k]
     orders_rel = str(cfg.get("orders_file", "어제보다 나은 오늘/군령.md")).replace("\\", "/").lower()
     low_blocks: list[str] = []
+    sangso_dir = str(cfg.get("sangso_wiki_folder") or "제갈량 상소").strip("/\\") + "/"
     # 클로드 코드 대화를 날마다 정리한 노트 (claude_to_obsidian.py 가 만드는 YYYY-MM-DD-claude.md)
     # → '막혔던 점'(막힌 일)과 '다음 할 일'(진행 중)을 여기서 직접 꺼냅니다
     summary_keys = [k.lower() for k in cfg.get("wiki_summaries", ["코딩/Claude 대화"]) if k]
@@ -188,7 +189,7 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
     # 최근에 고친 파일부터 → 예산이 모자라면 오래된 것이 빠집니다
     for p in sorted(_files(root), key=lambda f: f.stat().st_mtime, reverse=True):
         rel = p.relative_to(root).as_posix()
-        if rel.lower() == orders_rel:
+        if rel.lower() == orders_rel or rel.startswith(sangso_dir):   # 프로그램이 직접 쓰는 파일은 재료에서 뺌
             continue
         text = _read(p)
         digest = hashlib.sha1(text.encode("utf-8")).hexdigest()
