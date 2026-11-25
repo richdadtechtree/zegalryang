@@ -11,13 +11,14 @@ update.py — GitHub에 올라온 최신 프로그램으로 이 폴더를 새로
   → ZIP 에는 이런 파일이 애초에 들어 있지 않고, 아래 PROGRAM 목록에 있는 것만 덮어쓰므로 안전합니다.
 
 옛 버전이라 --update 가 없을 때 (윈도우 cmd, sangso 폴더에서 한 줄):
-  curl -L -o sangso_lib\update.py https://raw.githubusercontent.com/richdadtechtree/test/refs/heads/claude/zhuge-liang-daily-advice-1i5wmu/sangso_lib/update.py && py sangso_lib\update.py
+  curl -L -o sangso_lib\update.py https://raw.githubusercontent.com/richdadtechtree/zegalryang/HEAD/sangso_lib/update.py && py sangso_lib\update.py
+  (예전 저장소 richdadtechtree/test 에서 받던 컴퓨터도 이 한 줄이면 새 저장소로 옮겨집니다)
   → 이 파일만 먼저 받아서 직접 실행하면, 나머지를 모두 새로 고치고 지난 상소도 다시 그립니다.
 
 디버깅 힌트
   - "404" 가 나오면: 저장소가 비공개라 로그인 없이 못 받는 경우입니다. GitHub 에서 Code → Download ZIP 으로 받아
     폴더째 덮어쓰세요(내 기록은 ZIP 에 없어서 지워지지 않습니다).
-  - 다른 브랜치에서 받고 싶으면 아래 BRANCH 를 바꾸세요.
+  - 다른 브랜치에서 받고 싶으면 아래 BRANCH 를 "refs/heads/브랜치이름" 으로 바꾸세요.
 """
 
 from __future__ import annotations
@@ -32,9 +33,11 @@ from pathlib import Path, PurePosixPath
 
 log = logging.getLogger("sangso")
 
-REPO = "richdadtechtree/test"
-BRANCH = "claude/zhuge-liang-daily-advice-1i5wmu"
-ZIP_URL = f"https://codeload.github.com/{REPO}/zip/refs/heads/{BRANCH}"
+REPO = "richdadtechtree/zegalryang"
+# HEAD = 저장소의 '기본(메인) 브랜치'. 확인을 마치고 합친 코드만 받습니다.
+# (GitHub 설정에서 기본 브랜치 이름을 main 으로 바꿔도 그대로 동작합니다)
+BRANCH = "HEAD"
+ZIP_URL = f"https://codeload.github.com/{REPO}/zip/{BRANCH}"
 
 # 덮어써도 되는 '프로그램 파일' (이 이름이거나, 이 폴더 안에 있는 파일)
 PROGRAM = ("sangso.py", "sangso_lib/", "templates/", "install/", "install_windows.bat", "sample/",

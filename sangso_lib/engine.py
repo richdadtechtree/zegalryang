@@ -11,6 +11,7 @@ engine.py — 실제로 Claude에게 글을 써 달라고 요청하는 곳
   - "claude 실행 파일을 찾지 못했습니다" → config.json 의 claude_cli_path 에 전체 경로를 적으세요.
     (예약 작업은 터미널과 PATH가 달라서, 터미널에선 되는데 7시에만 실패하는 일이 흔합니다.)
   - "JSON을 찾지 못했습니다" → logs/ 폴더의 raw_*.txt 에 Claude가 실제로 뭐라고 답했는지 저장됩니다.
+  - 상소가 여전히 길다 → config.json 의 max_chars(본문 글자 수 한도)를 줄이세요.
 """
 
 from __future__ import annotations
@@ -85,11 +86,11 @@ def call_api(system: str, user: str, cfg: dict) -> str:
     client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수를 자동으로 읽습니다
     log.info("API 호출 중… 모델=%s", cfg["api_model"])
     try:
-        # 5천 자 이상의 긴 글이라 스트리밍으로 받아야 시간 초과가 나지 않습니다.
+        # 생각(thinking)까지 길어질 수 있어 스트리밍으로 받아야 시간 초과가 나지 않습니다.
         # fallbacks="default": 안전 필터가 드물게 거절하면 서버가 다른 모델로 자동 재시도합니다.
         with client.beta.messages.stream(
             model=cfg["api_model"],
-            max_tokens=32000,
+            max_tokens=16000,
             system=system,
             messages=[{"role": "user", "content": user}],
             thinking={"type": "adaptive"},
@@ -115,7 +116,7 @@ def call_api(system: str, user: str, cfg: dict) -> str:
 # ──────────────────────────────────────────────────────────────
 # 응답 → JSON
 # ──────────────────────────────────────────────────────────────
-def parse_json(raw: str, required=("title", "part1", "part2")) -> dict:
+def parse_json(raw: str, required=("title", "points")) -> dict:
     """모델이 JSON 앞뒤에 말을 덧붙이거나 ```json 으로 감싸도 본문만 꺼냅니다."""
     raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
     start, end = raw.find("{"), raw.rfind("}")
@@ -132,59 +133,58 @@ def parse_json(raw: str, required=("title", "part1", "part2")) -> dict:
 
 
 def count_chars(part: dict) -> int:
-    """공백·줄바꿈을 뺀 글자 수 (원고 분량을 가장 엄격하게 세는 방식)"""
+    """(예전 긴 상소용) 한 장의 공백·줄바꿈을 뺀 글자 수"""
     text = "".join(s.get("subtitle", "") + "".join(s.get("paragraphs", []))
                    for s in (part or {}).get("sections", []))
     return len(re.sub(r"\s", "", text))
 
 
-EXPAND = """아래는 오늘 상소 {label}의 초안입니다. 지금 공백 제외 {have}자로, 목표 {need}자에 못 미칩니다.
-같은 말투·흐름·사실을 지키면서 공백 제외 {target}자 이상이 되도록 늘려 쓰십시오.
-- 기존 문단을 버리지 말고, 각 문단에 구체적인 예시·실행 순서·따라 할 수 있는 요청문 예시를 더하십시오.
-- 필요하면 소제목을 1~2개 더하십시오. 주공에 관한 새로운 사실을 지어내지는 마십시오.
-- 설명 없이 {{"heading": "...", "sections": [{{"subtitle": "...", "paragraphs": ["..."]}}]}} JSON 하나만 출력하십시오.
+def count_points(data: dict) -> int:
+    """짧은 상소 본문(인사 + 핵심들)의 공백 제외 글자 수"""
+    text = str(data.get("salutation") or "") + "".join(
+        str(p.get("head", "")) + str(p.get("body", "")) for p in data.get("points") or [] if isinstance(p, dict))
+    return len(re.sub(r"\s", "", text))
 
-[초안]
-{draft}
 
-[참고: 오늘 상소의 재료]
-{user}"""
+SHRINK = """아래 상소의 points 가 공백 제외 {have}자로, 한도 {limit}자를 넘습니다.
+뜻과 말투·사실은 그대로 두고 {limit}자 이내로 줄이십시오. 덜 중요한 핵심은 통째로 빼도 됩니다.
+설명 없이 {{"salutation": "...", "points": [{{"tag": "...", "head": "...", "body": "...", "basis": "..."}}]}} JSON 하나만 출력하십시오.
+
+[상소]
+{draft}"""
 
 
 def _call(name: str, system: str, prompt: str, cfg: dict, workdir: Path) -> str:
     return call_claude_cli(system, prompt, cfg, workdir) if name == "claude-cli" else call_api(system, prompt, cfg)
 
 
-def _expand(name, system, user, part, label, need, cfg, workdir, logdir, key) -> dict:
-    """모자란 장 하나만 초안을 건네고 늘려 쓰게 합니다. (전체를 다시 쓰게 하는 것보다 훨씬 확실합니다)"""
-    for attempt in (1, 2):
-        have = count_chars(part)
-        if have >= need:
-            break
-        log.info("[%s] %s 보강 %d차 (%d자 → 목표 %d자)", name, label, attempt, have, need)
-        prompt = EXPAND.format(label=label, have=have, need=need, target=int(need * 1.2),
-                               draft=json.dumps(part, ensure_ascii=False, indent=1), user=user)
-        try:
-            raw = _call(name, system, prompt, cfg, workdir)
-            (logdir / f"raw_{name}_{key}_expand{attempt}.txt").write_text(raw, encoding="utf-8")
-            new = parse_json(raw, required=())
-            new = new.get(key, new)  # 모델이 상소 전체 형식으로 답해도 해당 장만 꺼냅니다
-            if not isinstance(new, dict) or "sections" not in new:
-                raise EngineError("보강 결과에 sections가 없습니다")
-        except (EngineError, subprocess.TimeoutExpired, OSError) as e:
-            log.warning("[%s] %s 보강 실패: %s", name, label, e)
-            break
-        if count_chars(new) > have:
-            part = new
-    return part
+def _shrink(name, system, data, limit, cfg, workdir, logdir) -> dict:
+    """한도를 크게(30% 넘게) 넘었을 때만 한 번 줄여 달라고 합니다. 실패하면 그대로 씁니다."""
+    have = count_points(data)
+    if have <= limit * 1.3:
+        return data
+    log.info("[%s] 너무 김 (%d자 > 한도 %d자) → 줄이기", name, have, limit)
+    draft = {"salutation": data.get("salutation", ""), "points": data.get("points", [])}
+    try:
+        raw = _call(name, system, SHRINK.format(have=have, limit=limit,
+                                                 draft=json.dumps(draft, ensure_ascii=False, indent=1)),
+                    cfg, workdir)
+        (logdir / f"raw_{name}_shrink.txt").write_text(raw, encoding="utf-8")
+        new = parse_json(raw, required=("points",))
+    except (EngineError, subprocess.TimeoutExpired, OSError) as e:
+        log.warning("[%s] 줄이기 실패, 그대로 씀: %s", name, e)
+        return data
+    if new.get("points") and count_points(new) < have:
+        data["points"] = new["points"]
+        data["salutation"] = new.get("salutation", data.get("salutation", ""))
+    return data
 
 
 def generate(system: str, user: str, cfg: dict, workdir: Path, logdir: Path) -> dict:
-    """엔진을 골라 초안을 받고, 분량이 모자란 장은 따로 보강합니다."""
+    """엔진을 골라 상소를 받고, 너무 길면 한 번 줄입니다."""
     engine = cfg.get("engine", "auto")
     order = {"auto": ["claude-cli", "api"], "claude-cli": ["claude-cli"], "api": ["api"]}.get(engine, ["claude-cli"])
-    needs = {"part1": ("제1장(클로드코드 운용책)", cfg["min_chars_part1"]),
-             "part2": ("제2장(대업과 삶의 방향)", cfg["min_chars_part2"])}
+    limit = int(cfg.get("max_chars", 700))
 
     errors = []
     for name in order:
@@ -194,21 +194,20 @@ def generate(system: str, user: str, cfg: dict, workdir: Path, logdir: Path) -> 
                 raw = _call(name, system, user, cfg, workdir)
                 (logdir / f"raw_{name}_{attempt}.txt").write_text(raw, encoding="utf-8")
                 data = parse_json(raw)
+                if not isinstance(data["points"], list):
+                    raise EngineError("JSON의 points 가 목록이 아닙니다")
                 break
             except (EngineError, subprocess.TimeoutExpired, OSError) as e:
                 log.warning("[%s] %d차 시도 실패: %s", name, attempt, e)
                 errors.append(f"{name}: {e}")
+                data = None
                 if not (isinstance(e, EngineError) and "JSON" in str(e)):
                     break
         if data is None:
             continue  # 다음 엔진으로
 
-        log.info("[%s] 초안: 제1장 %d자, 제2장 %d자", name, count_chars(data["part1"]), count_chars(data["part2"]))
-        for key, (label, need) in needs.items():
-            data[key] = _expand(name, system, user, data[key], label, need, cfg, workdir, logdir, key)
-        c1, c2 = count_chars(data["part1"]), count_chars(data["part2"])
-        log.info("[%s] 완성: 제1장 %d자, 제2장 %d자", name, c1, c2)
-        if c1 < needs["part1"][1] or c2 < needs["part2"][1]:
-            log.warning("보강 후에도 목표 분량에 못 미쳤습니다 (그대로 사용)")
+        data["points"] = [p for p in data["points"] if isinstance(p, dict) and p.get("body")][:3]
+        data = _shrink(name, system, data, limit, cfg, workdir, logdir)
+        log.info("[%s] 완성: 핵심 %d개, 본문 %d자 (공백 제외)", name, len(data["points"]), count_points(data))
         return data
     raise EngineError(" / ".join(errors) or "모든 엔진 실패")
