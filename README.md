@@ -74,7 +74,7 @@ Claude는 **claude.ai에서 나눈 예전 대화를 스스로 꺼내 볼 수 없
 ### 1단계 — 이 폴더를 내 컴퓨터에 받기
 
 ```bash
-git clone https://github.com/richdadtechtree/test.git sangso
+git clone https://github.com/richdadtechtree/zegalryang.git sangso
 cd sangso
 ```
 
