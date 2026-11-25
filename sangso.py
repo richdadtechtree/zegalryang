@@ -11,6 +11,7 @@
   python sangso.py --redraw     Claude를 부르지 않고, 지난 상소들을 지금 디자인으로 다시 그립니다
   python sangso.py --new-art    조회 장면 배경을 그림(무료 이미지 서비스)으로 새로 뽑고, 지난 상소에도 적용합니다
   python sangso.py --update     GitHub의 최신 프로그램으로 새로 고치고, 지난 상소에도 적용합니다 (내 기록은 그대로)
+  python sangso.py --to-wiki    이미 쓴 오늘 상소를 위키(제갈량 상소/날짜.md)에 올립니다 (웹앱 '내 공간'에서 보기)
   python sangso.py --check      점검: 화면 버전과, 인물마다 어떤 초상화 파일을 쓰는지 보여 줍니다
   python sangso.py --publish-setup   처음 한 번: Cloudflare 에 올릴 준비 (계정 ID·토큰 입력)
   python sangso.py --publish    지금 바로 Cloudflare 에 올립니다 (설정 후에는 상소를 쓸 때마다 자동)
@@ -35,7 +36,7 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE))
 
-from sangso_lib import art, collect, engine, orders, prompt, render, wiki  # noqa: E402
+from sangso_lib import art, collect, engine, orders, prompt, render, to_wiki, wiki  # noqa: E402
 
 OUT, ARCHIVE, LOGS = BASE / "output", BASE / "archive", BASE / "logs"
 TEMPLATE, SAMPLE = BASE / "templates" / "sangso.html", BASE / "sample" / "first_sangso.json"
@@ -122,6 +123,13 @@ def write_today(today: date, cfg: dict) -> tuple[Path, str]:
         orders.add_day(orders.store_for(BASE, cfg), today.isoformat(), data.get("today_task") or {})
     except OSError as e:
         log.warning("군령 파일에 적지 못함: %s", e)
+    # 상소를 마크다운으로 위키(my-wiki/제갈량 상소/날짜.md)에 올림 → richdadtechtree.com '내 공간'에서 보기
+    try:
+        where = to_wiki.publish(BASE, cfg, data, today)
+        if where:
+            log.info("상소를 위키에 올림: %s", where)
+    except OSError as e:
+        log.warning("상소를 위키에 올리지 못함 (상소는 그대로 뜸): %s", e)
     if wiki_snap:   # 상소를 다 쓴 뒤에만 위키 사진을 남깁니다 → 내일은 이 사진 이후 바뀐 것만 읽음
         wiki.save_snapshot(ARCHIVE, today, wiki_snap)
     label = {"auto": "클로드 코드", "claude-cli": "클로드 코드", "api": cfg["api_model"]}.get(cfg["engine"], cfg["engine"])
@@ -139,6 +147,7 @@ def main() -> int:
     ap.add_argument("--publish", action="store_true", help="지금 바로 Cloudflare 에 올린다")
     ap.add_argument("--publish-password", action="store_true", help="비밀번호 문 만들기/바꾸기")
     ap.add_argument("--github-setup", action="store_true", help="군령을 깃허브 위키(my-wiki)에 바로 적도록 토큰 등록")
+    ap.add_argument("--to-wiki", action="store_true", help="이미 쓴 오늘 상소를 위키(제갈량 상소/날짜.md)에 올린다 (다시 쓰지 않음)")
     ap.add_argument("--clerk", action="store_true", help="(자동으로 쓰임) 군령 체크를 위키에 적는 서기를 켠다")
     ap.add_argument("--check", action="store_true", help="점검: 화면 버전과 인물별 초상화 파일을 보여 준다")
     ap.add_argument("--update", action="store_true", help="GitHub의 최신 프로그램으로 새로 고친다 (내 기록·설정·그림은 그대로)")
@@ -148,6 +157,14 @@ def main() -> int:
     setup_logging()
     if args.github_setup:
         return orders.github_setup(BASE, load_config())
+    if args.to_wiki:
+        src = ARCHIVE / f"{date.today().isoformat()}.json"
+        if not src.exists():
+            print("오늘 상소가 아직 없습니다. 먼저  py sangso.py  로 쓰세요.")
+            return 1
+        where = to_wiki.publish(BASE, load_config(), json.loads(src.read_text(encoding="utf-8")), date.today())
+        print(f"✓ 올렸습니다 → {where}" if where else "✗ 위키 폴더(wiki_dir)도 깃허브 토큰(github.json)도 없어 올리지 못했습니다.")
+        return 0 if where else 1
     if args.clerk:
         orders.serve(BASE, load_config())
         return 0
