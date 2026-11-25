@@ -5,6 +5,7 @@ collect.py — 제갈량이 읽을 '주공에 대한 기록'을 모으는 곳
   1) profile.md                : 사용자가 직접 적는 나에 대한 기록 (가장 중요)
   2) 클로드코드 대화 기록       : ~/.claude/projects/**/*.jsonl  (내 컴퓨터에 자동 저장됨)
   3) claude.ai 대화 내보내기    : data/ 폴더에 넣은 conversations.json (선택)
+  (+ 위키 폴더는 wiki.py 가 따로 읽습니다)
 
 ⚠ 기록 파일의 형식은 클로드코드 버전에 따라 조금씩 바뀔 수 있습니다.
    그래서 모든 읽기를 try/except로 감싸서, 한 파일이 이상해도 전체가 멈추지 않게 했습니다.
@@ -172,8 +173,27 @@ def format_items(items: list[dict]) -> str:
 # ──────────────────────────────────────────────────────────────
 # 4) 지난 상소문 (같은 말 반복 방지 + 어제 군령 점검용)
 # ──────────────────────────────────────────────────────────────
-def read_recent_sangso(archive: Path, n: int = 5) -> str:
-    files = sorted(archive.glob("*.json"), reverse=True)[:n]
+def last_sangso_time(archive: Path, today_iso: str) -> datetime | None:
+    """오늘 이전에 쓴 마지막 상소의 시각. 이 뒤의 기록만 '새 기록'으로 칩니다."""
+    files = sorted(f for f in archive.glob("????-??-??.json") if f.stem < today_iso)
+    if not files:
+        return None
+    return datetime.fromtimestamp(files[-1].stat().st_mtime, tz=timezone.utc)
+
+
+def split_new_old(items: list[dict], since: datetime | None, old_budget: int) -> tuple[list[dict], list[dict]]:
+    """기록을 '지난 상소 이후(새 것)'와 '그 전(배경)'으로 나눕니다. 배경은 짧게만 남깁니다.
+    지난 상소가 없으면(첫 상소) 모두 새 것입니다."""
+    if since is None:
+        return items, []
+    new = [it for it in items if it["when"] and it["when"] >= since]
+    old = [it for it in items if not (it["when"] and it["when"] >= since)]
+    return new, _newest_within_budget(old, old_budget)
+
+
+def read_recent_sangso(archive: Path, n: int = 7) -> str:
+    """지난 상소에서 '이미 한 말'만 짧게 뽑습니다. 제갈량은 이것과 겹치는 말을 하면 안 됩니다."""
+    files = sorted(archive.glob("????-??-??.json"), reverse=True)[:n]
     lines = []
     for f in files:
         try:
@@ -181,11 +201,14 @@ def read_recent_sangso(archive: Path, n: int = 5) -> str:
         except (OSError, json.JSONDecodeError):
             continue
         tasks = d.get("today_task") or {}
-        subs = [s.get("subtitle", "") for part in ("part1", "part2")
-                for s in (d.get(part) or {}).get("sections", [])]
-        lines.append(f"- {f.stem}: 제목「{d.get('title','')}」 / 소제목: {', '.join(subs)} / "
-                     f"군령: {tasks.get('claude_code','')} | {tasks.get('life','')} / "
+        court = d.get("court") or {}
+        if d.get("points"):   # 새 형식(짧은 상소)
+            said = " / ".join(f"[{p.get('tag','')}] {p.get('head','')}" for p in d["points"] if isinstance(p, dict))
+        else:                 # 예전 형식(긴 상소): 소제목만
+            said = ", ".join(s.get("subtitle", "") for part in ("part1", "part2")
+                             for s in (d.get(part) or {}).get("sections", []))
+        lines.append(f"- {f.stem}: 핵심「{said}」 / 군령: {tasks.get('claude_code','')} | {tasks.get('life','')} / "
                      f"한 구절: {(d.get('motto') or {}).get('hanja','')} / "
-                     f"조회 사자성어: {((d.get('court') or {}).get('idiom') or {}).get('hanja','')} / "
-                     f"한마디 근거: {(d.get('court') or {}).get('event','')}")
+                     f"사자성어: {(court.get('idiom') or {}).get('hanja','')} / "
+                     f"한마디 근거: {court.get('event','')}")
     return "\n".join(lines) or "(지난 상소 없음 — 오늘이 첫 상소)"

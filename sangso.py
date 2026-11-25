@@ -35,7 +35,7 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE))
 
-from sangso_lib import art, collect, engine, prompt, render  # noqa: E402
+from sangso_lib import art, collect, engine, prompt, render, wiki  # noqa: E402
 
 OUT, ARCHIVE, LOGS = BASE / "output", BASE / "archive", BASE / "logs"
 TEMPLATE, SAMPLE = BASE / "templates" / "sangso.html", BASE / "sample" / "first_sangso.json"
@@ -87,20 +87,26 @@ def wait_until(hhmm: str) -> None:
 
 
 def write_today(today: date, cfg: dict) -> tuple[Path, str]:
-    """오늘의 상소를 새로 쓰고 (HTML 경로, 엔진 이름)을 돌려줍니다."""
+    """오늘의 상소를 새로 쓰고 (HTML 경로, 엔진 이름)을 돌려줍니다.
+    재료는 '지난 상소 이후 새로 생긴 것' 위주: 위키의 바뀐 줄 + 클로드코드 새 기록."""
     budget = cfg["max_context_chars"]
-    cc_items = collect.read_claude_code_history(cfg["history_days"], budget * 2 // 3)
-    ai_items = collect.read_claude_ai_export(BASE, budget // 3)
-    log.info("재료: 클로드코드 기록 %d건, claude.ai 기록 %d건", len(cc_items), len(ai_items))
+    since = collect.last_sangso_time(ARCHIVE, today.isoformat())   # 지난 상소를 쓴 시각
+    cc_items = collect.read_claude_code_history(cfg["history_days"], budget // 2)
+    cc_new, cc_old = collect.split_new_old(cc_items, since, old_budget=3000)
+    ai_items = collect.read_claude_ai_export(BASE, budget // 6)
+    wiki_text, wiki_snap, _ = wiki.collect(cfg, ARCHIVE, today)
+    log.info("재료: 클로드코드 새 기록 %d건(이전 %d건 참고), claude.ai %d건", len(cc_new), len(cc_old), len(ai_items))
 
     system, user = prompt.build(
         today,
-        nth=len([f for f in ARCHIVE.glob("*.json") if f.stem != today.isoformat()]),
+        nth=len([f for f in ARCHIVE.glob("????-??-??.json") if f.stem != today.isoformat()]),
         profile=collect.read_profile(BASE),
         recent=collect.read_recent_sangso(ARCHIVE),
-        cc_history=collect.format_items(cc_items),
+        wiki=wiki_text,
+        cc_new=collect.format_items(cc_new),
+        cc_old=collect.format_items(cc_old),
         ai_history=collect.format_items(ai_items),
-        min1=cfg["min_chars_part1"], min2=cfg["min_chars_part2"],
+        max_chars=int(cfg.get("max_chars", 700)),
     )
     # 빈 작업 폴더에서 claude -p를 실행해야 엉뚱한 프로젝트 파일을 읽지 않습니다
     work = LOGS / "work"
@@ -109,6 +115,8 @@ def write_today(today: date, cfg: dict) -> tuple[Path, str]:
 
     (ARCHIVE / f"{today.isoformat()}.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    if wiki_snap:   # 상소를 다 쓴 뒤에만 위키 사진을 남깁니다 → 내일은 이 사진 이후 바뀐 것만 읽음
+        wiki.save_snapshot(ARCHIVE, today, wiki_snap)
     label = {"auto": "클로드 코드", "claude-cli": "클로드 코드", "api": cfg["api_model"]}.get(cfg["engine"], cfg["engine"])
     return draw(data, today, OUT, TEMPLATE, label), label
 
@@ -134,6 +142,8 @@ def main() -> int:
         print(f"프로그램 폴더: {BASE}")
         print("초상화 (assets/portraits 폴더):")
         print(art.report(BASE / "assets"))
+        w = wiki.find_dir(load_config().get("wiki_dir", ""))
+        print(f"위키 폴더: {w or '못 찾음 — config.json 의 wiki_dir 에 경로를 적으세요'}")
         return 0
     if args.publish_setup or args.publish or args.publish_password:
         from sangso_lib import publish

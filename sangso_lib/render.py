@@ -22,12 +22,12 @@ from string import Template
 from urllib.parse import quote
 
 from . import art
-from .engine import count_chars
+from .engine import count_chars, count_points
 
 log = logging.getLogger("sangso")
 
 # 화면(템플릿·court.js) 버전. 화면 오른쪽 아래에 작게 보입니다 → "내 화면이 최신인가?"를 확인하는 용도
-UI_VERSION = "2026.09.26c"
+UI_VERSION = "2026.11.25"
 
 STEMS, BRANCHES = "甲乙丙丁戊己庚辛壬癸", "子丑寅卯辰巳午未申酉戌亥"
 
@@ -52,10 +52,36 @@ def _body(part: dict) -> str:
     return "\n      ".join(out)
 
 
+def _points(points: list) -> str:
+    """짧은 상소의 핵심 카드들. 꼬리표(막힌 일·진행 중…) + 요지 + 조언 + 근거"""
+    out = []
+    for i, pt in enumerate(p for p in points if isinstance(p, dict)):
+        basis = f'<p class="basis">근거 · {_esc(pt.get("basis"))}</p>' if pt.get("basis") else ""
+        out.append(f'<section class="point"><div class="point-num" aria-hidden="true">{"一二三四五"[i % 5]}</div>'
+                   f'<div><p class="point-tag">{_esc(pt.get("tag"))}</p><h3>{_esc(pt.get("head"))}</h3>'
+                   f'<p>{_esc(pt.get("body"))}</p>{basis}</div></section>')
+    return "\n      ".join(out)
+
+
+def _long_parts(data: dict) -> str:
+    """예전 긴 상소(제1장·제2장) — 지난 상소를 다시 그릴 때만 씁니다."""
+    def sec(num, sub, part):
+        return (f'<section class="part"><div class="part-head"><div class="part-num" aria-hidden="true">{num}</div>'
+                f'<div><p class="part-sub">{sub}</p><h2 class="part-title">{_esc((part or {}).get("heading"))}</h2></div></div>'
+                f'{_body(part)}</section>')
+    return (sec("一", "제1장 · 클로드 코드 운용책(運用策)", data.get("part1")) + '\n    <hr class="rule">\n    '
+            + sec("二", "제2장 · 대업(大業)과 삶의 방향", data.get("part2")))
+
+
 def render(data: dict, day: date, out_dir: Path, template: Path, engine_label: str,
            notice: str = "", filename: str | None = None) -> Path:
     """filename을 주면(견본·임시본) 그 이름으로 저장하고, 지난 상소의 링크는 건드리지 않습니다."""
-    c1, c2 = count_chars(data.get("part1")), count_chars(data.get("part2"))
+    short = bool(data.get("points"))   # 새 형식(짧은 상소)인가, 예전 긴 상소인가
+    if short:
+        stats = f"본문 {count_points(data):,}자 (공백 제외)"
+    else:
+        c1, c2 = count_chars(data.get("part1")), count_chars(data.get("part2"))
+        stats = f"제1장 {c1:,}자 · 제2장 {c2:,}자 · 합계 {c1 + c2:,}자 (공백 제외)"
     tasks, motto = data.get("today_task") or {}, data.get("motto") or {}
 
     # 앞뒤 날짜의 상소 파일이 있으면 '지난/다음 상소' 버튼을 켭니다
@@ -98,11 +124,10 @@ def render(data: dict, day: date, out_dir: Path, template: Path, engine_label: s
         ganji=ganji(day),
         title=_esc(data.get("title")),
         salutation=_esc(data.get("salutation")),
-        p1_heading=_esc((data.get("part1") or {}).get("heading")),
-        p2_heading=_esc((data.get("part2") or {}).get("heading")),
-        p1_body=_body(data.get("part1")),
-        p2_body=_body(data.get("part2")),
+        body=_points(data["points"]) if short else _long_parts(data),
         closing=_esc(data.get("closing")),
+        closing_class="" if data.get("closing") else "off",
+        opening_class="" if data.get("salutation") else "off",
         task_cc=_esc(tasks.get("claude_code")),
         task_life=_esc(tasks.get("life")),
         # 구절을 띄어쓰기 단위로 나눠 한 줄(세로 한 칸)씩 세웁니다
@@ -110,7 +135,7 @@ def render(data: dict, day: date, out_dir: Path, template: Path, engine_label: s
         motto_reading=_esc(motto.get("reading")),
         motto_meaning=_esc(motto.get("meaning")),
         motto_source=_esc(motto.get("source")),
-        c1=f"{c1:,}", c2=f"{c2:,}", ctotal=f"{c1 + c2:,}",
+        stats=stats,
         engine=_esc(engine_label),
         notice=_esc(notice),
         one_liner=_esc(one_liner),

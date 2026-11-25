@@ -108,8 +108,20 @@ p { margin: 0 0 1.1em; }
   radial-gradient(circle, var(--cinnabar) 3px, transparent 3.5px) center / 18px 18px no-repeat,
   linear-gradient(var(--ink-faint), var(--ink-faint)) center / 100% 1px no-repeat; }
 
+/* ── 짧은 상소: 핵심 카드 (하루 1~3개) ───────────────────── */
+.point { display: flex; gap: 16px; align-items: flex-start; margin-top: 34px; }
+.point-num { font-family: var(--hanja); font-weight: 900; font-size: 22px; color: var(--paper);
+  background: var(--cinnabar); width: 40px; height: 40px; display: grid; place-items: center;
+  border-radius: 3px; flex: none; margin-top: 4px; }
+.point-tag { margin: 0; font-size: 13px; color: var(--cinnabar); letter-spacing: .08em; font-weight: 700; }
+.point h3 { margin: 2px 0 8px; padding-left: 0; }
+.point h3::before { display: none; }
+.point .basis { font-size: 13px; color: var(--ink-soft); margin: -4px 0 0; }
+.opening.off, .closing.off { display: none; }
+body.vertical .point { margin: 0 34px 0 0; }
+
 /* ── 오늘의 군령 + 오늘의 한 구절 ─────────────────────── */
-.orders-wrap { display: grid; grid-template-columns: 1fr auto; gap: 22px; margin-top: 52px; align-items: stretch; }
+.orders-wrap { display: grid; grid-template-columns: 1fr auto; gap: 22px; margin-top: 52px; align-items: start; }
 .orders { border: 2px solid var(--ink); padding: 22px 24px 18px; position: relative; background: rgba(255,255,255,.18); }
 .orders::before { content: "軍令"; position: absolute; top: -15px; left: 18px; background: var(--paper);
   padding: 0 10px; font-family: var(--hanja); font-weight: 900; color: var(--cinnabar); letter-spacing: .3em; }
@@ -332,21 +344,9 @@ body.vertical .notice { margin: 0 0 0 24px; }
       </div>
     </header>
 
-    <p class="opening">$salutation</p>
+    <p class="opening $opening_class">$salutation</p>
 
-    <section class="part">
-      <div class="part-head"><div class="part-num" aria-hidden="true">一</div>
-        <div><p class="part-sub">제1장 · 클로드 코드 운용책(運用策)</p><h2 class="part-title">$p1_heading</h2></div></div>
-      $p1_body
-    </section>
-
-    <hr class="rule">
-
-    <section class="part">
-      <div class="part-head"><div class="part-num" aria-hidden="true">二</div>
-        <div><p class="part-sub">제2장 · 대업(大業)과 삶의 방향</p><h2 class="part-title">$p2_heading</h2></div></div>
-      $p2_body
-    </section>
+    $body
 
     <div class="orders-wrap">
       <div class="orders">
@@ -361,7 +361,7 @@ body.vertical .notice { margin: 0 0 0 24px; }
       </div>
     </div>
 
-    <p class="closing">$closing</p>
+    <p class="closing $closing_class">$closing</p>
 
     <div class="sign">
       <div class="sign-txt">
@@ -371,7 +371,7 @@ body.vertical .notice { margin: 0 0 0 24px; }
       <div class="seal" aria-label="제갈량인"><span>諸</span><span>葛</span><span>亮</span><span>印</span></div>
     </div>
 
-    <p class="stats">제1장 $c1자 · 제2장 $c2자 · 합계 $ctotal자 (공백 제외) · $engine</p>
+    <p class="stats">$stats · $engine</p>
   </article>
   <div class="rod" aria-hidden="true"></div>
 </div>
