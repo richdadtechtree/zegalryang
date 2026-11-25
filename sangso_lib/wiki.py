@@ -13,6 +13,8 @@ wiki.py — 주공의 위키(마크다운 노트 폴더)를 읽어 '지난 상�
      config.json 의 wiki_pinned 에 파일·폴더 이름의 일부를 적으면 됩니다.
   • wiki_focus(기본 '어제보다 나은 오늘' 폴더)에 든 것은 ①②③ 안에서 맨 앞에 둡니다.
   • wiki_low(기본 '건강/운동 기록')처럼 매일 쌓이는 기록은 맨 뒤에, 가장 최근 1개만 짧게.
+  • 클로드 코드 대화 정리 노트(wiki_summaries, 기본 '코딩/Claude 대화')는 '막혔던 점'·'다음 할 일' 칸만
+    꺼내 맨 앞에 둡니다. 최근 todo_days 일 노트의 체크 안 된 '다음 할 일'은 '진행 중'으로 매일 함께 넘깁니다.
   • 군령 파일(orders_file)은 프로그램이 직접 적는 파일이라 여기서 읽지 않습니다(군령 장부로 따로 넘김).
 
 디버깅 힌트
@@ -26,6 +28,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
+import re
 import logging
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -125,6 +128,19 @@ def save_snapshot(archive: Path, today: date, snap: dict) -> None:
 # ──────────────────────────────────────────────────────────────
 # 본체
 # ──────────────────────────────────────────────────────────────
+def _sections(text: str, names: list[str]) -> str:
+    """마크다운에서 '## 이름…' 으로 시작하는 칸들만 이 순서대로 꺼냅니다. (내용이 '없음'뿐인 칸은 뺌)"""
+    parts = re.split(r"(?m)^(?=## )", text)
+    out = []
+    for name in names:
+        for part in parts:
+            if part.startswith(f"## {name}"):
+                body = part.split("\n", 1)[1].strip() if "\n" in part else ""
+                if body and body not in ("- 없음", "없음"):
+                    out.append(part.strip())
+    return "\n\n".join(out)
+
+
 def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
     """(제갈량에게 넘길 글, 오늘의 사진, 통계)를 돌려줍니다. 위키가 없으면 빈 글."""
     root = find_dir(cfg.get("wiki_dir", ""))
@@ -140,6 +156,12 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
     low_keys = [k.lower() for k in cfg.get("wiki_low", ["건강/운동 기록"]) if k]
     orders_rel = str(cfg.get("orders_file", "어제보다 나은 오늘/군령.md")).replace("\\", "/").lower()
     low_blocks: list[str] = []
+    # 클로드 코드 대화를 날마다 정리한 노트 (claude_to_obsidian.py 가 만드는 YYYY-MM-DD-claude.md)
+    # → '막혔던 점'(막힌 일)과 '다음 할 일'(진행 중)을 여기서 직접 꺼냅니다
+    summary_keys = [k.lower() for k in cfg.get("wiki_summaries", ["코딩/Claude 대화"]) if k]
+    summary_secs = ["막혔던 점", "다음 할 일"]   # 다룬 주제는 클로드 코드 기록으로 따로 들어가므로 뺌
+    todo_since = (today - timedelta(days=int(cfg.get("todo_days", 7)))).isoformat()
+    open_todos: list[str] = []
 
     snap, new_blocks, changed_blocks, pinned_blocks = {}, [], [], []
     # 최근에 고친 파일부터 → 예산이 모자라면 오래된 것이 빠집니다
@@ -155,6 +177,15 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
         old = prev.get(rel)
         is_focus = any(k in rel.lower() for k in focus_keys)
         is_low = any(k in rel.lower() for k in low_keys)
+        is_summary = any(k in rel.lower() for k in summary_keys)
+        if is_summary:
+            is_focus = True
+            m = re.search(r"(\d{4}-\d{2}-\d{2})", p.name)
+            day = m.group(1) if m else f"{mtime:%Y-%m-%d}"
+            if todo_since <= day < today.isoformat() or (day == today.isoformat()):
+                # 체크 안 된 '다음 할 일' = 아직 진행 중인 일 (체크 안 한 건 매일 다시 올라와도 됨)
+                todo = _sections(text, ["다음 할 일"])
+                open_todos += [f"- ({day}) {l.strip()[6:]}" for l in todo.splitlines() if l.strip().startswith("- [ ]")]
 
         def put(blocks: list, block: str) -> None:
             if is_low:                      # 매일 쌓이는 기록: 가장 최근 것 1개만
@@ -170,7 +201,12 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
             if prev_day is None and mtime < since:
                 pass
             elif text.strip():
-                put(new_blocks, f"### [새 파일] {rel} ({when})\n{_clip(text)}")
+                if is_summary:   # 앞에서부터 (막혔던 점 → 다음 할 일), 중간이 잘리지 않게
+                    body = _sections(text, summary_secs) or "(막혔던 점·다음 할 일 없음)"
+                    body = body if len(body) <= 3500 else body[:3500] + "\n…(뒤 생략)"
+                else:
+                    body = _clip(text)
+                put(new_blocks, f"### [새 파일] {rel} ({when})\n{body}")
                 continue
         elif old.get("sha") != digest:
             added = _added_lines(old.get("text", ""), text)
@@ -180,6 +216,10 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
         if pinned_keys and any(k in rel.lower() for k in pinned_keys) and text.strip():
             put(pinned_blocks, f"### [늘 곁에 둘 글] {rel} (바뀌지 않음 — 방향 확인용)\n{_clip(text, 1200)}")
 
+    if open_todos:
+        # 진행 중 묶음은 '늘 곁에 둘 글' 맨 앞에 (새 노트가 없는 날에도 들어감)
+        pinned_blocks.insert(0, "### ★[진행 중] 클로드 코드 대화 정리의 '다음 할 일' 가운데 아직 체크 안 된 것"
+                                f" (최근 {cfg.get('todo_days', 7)}일)\n" + "\n".join(open_todos[:20]))
     out, used = [], 0
     for kind, blocks in (("new", new_blocks), ("changed", changed_blocks), ("pinned", pinned_blocks),
                          ("low", low_blocks)):
@@ -190,7 +230,7 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
             used += len(b)
             stats[kind] += 1
 
-    head = ("(★ 표시는 주공이 상소를 위해 적는 '어제보다 나은 오늘' 폴더 — 가장 먼저 보십시오)\n"
+    head = ("(★ 표시는 가장 먼저 볼 것: '어제보다 나은 오늘' 폴더, 그리고 클로드 코드 대화 정리의 '막혔던 점'·'다음 할 일')\n"
             if any("★" in b for b in out) else "") + (f"(지난 상소 때 읽은 위키: {prev_day} 기준. 아래는 그 뒤로 새로 생기거나 바뀐 것만입니다)"
             if prev_day else "(위키를 처음 읽습니다. 최근에 고친 파일만 담았습니다)")
     body = "\n\n".join(out) if out else "(지난 상소 이후 위키에 새로 적힌 것 없음)"
