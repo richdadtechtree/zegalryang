@@ -16,7 +16,7 @@ orders.py — 군령(오늘 할 일 2가지)의 체크를 위키 파일에 적�
 
 디버깅 힌트
   - 화면 아래에 "위키에 반영되지 않습니다"가 뜨면 → 서기가 꺼진 것. python sangso.py 로 다시 열면 함께 켜집니다.
-  - 서기 기록: logs/clerk.log
+  - 깃허브 모드에서 "401/403" → 토큰이 만료됐거나 my-wiki 저장소의 Contents 쓰기 권한이 없음. --github-setup 다시 실행
 """
 
 from __future__ import annotations
@@ -42,10 +42,135 @@ _lock = threading.Lock()           # 체크가 동시에 두 번 들어와도 �
 
 
 def orders_path(base: Path, cfg: dict) -> Path:
+    """(로컬 모드) 노트북의 군령 파일 위치. 위키 폴더가 없으면 archive/군령.md"""
     from . import wiki
     root = wiki.find_dir(cfg.get("wiki_dir", ""))
     rel = cfg.get("orders_file", "어제보다 나은 오늘/군령.md")
     return (root / rel) if root else (base / "archive" / "군령.md")
+
+
+class LocalStore:
+    """노트북 폴더의 군령 파일을 읽고 씁니다."""
+    def __init__(self, path: Path):
+        self.path, self.where = path, str(path)
+
+    def read(self) -> str:
+        return _read(self.path)
+
+    def update(self, change, message: str) -> bool:
+        """change(옛 글) → 새 글 (None 이면 바꾸지 않음). 바꿨으면 True."""
+        with _lock:
+            new = change(self.read())
+            if new is None:
+                return False
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(new, encoding="utf-8")
+            return True
+
+
+class GitHubStore:
+    """깃허브 저장소의 군령 파일을 GitHub API 로 바로 읽고 씁니다 (웹앱·휴대폰·뮤즈 앱과 같은 파일)."""
+    API = "https://api.github.com"
+
+    def __init__(self, repo: str, path: str, token: str):
+        from urllib.parse import quote
+        self.repo, self.file, self.token = repo, path, token
+        self.url = f"{self.API}/repos/{repo}/contents/{quote(path)}"
+        self.where = f"github.com/{repo}/{path}"
+
+    def _req(self, method: str, body: dict | None = None):
+        import urllib.request
+        req = urllib.request.Request(self.url, method=method,
+                                     data=json.dumps(body).encode("utf-8") if body else None,
+                                     headers={"Authorization": f"Bearer {self.token}",
+                                              "Accept": "application/vnd.github+json",
+                                              "X-GitHub-Api-Version": "2022-11-28",
+                                              "User-Agent": "zhuge-sangso/1.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read().decode("utf-8"))
+
+    def _get(self) -> tuple[str, str | None]:
+        """(글, sha). 파일이 아직 없으면 ('', None)."""
+        import base64
+        import urllib.error
+        try:
+            d = self._req("GET")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return "", None
+            raise
+        return base64.b64decode(d.get("content", "")).decode("utf-8"), d.get("sha")
+
+    def read(self) -> str:
+        return self._get()[0]
+
+    def update(self, change, message: str) -> bool:
+        import base64
+        import urllib.error
+        for attempt in range(4):           # 그사이 누가 고쳤으면(409·422) 다시 읽고 다시 고침
+            text, sha = self._get()
+            new = change(text)
+            if new is None:
+                return False
+            body = {"message": message, "content": base64.b64encode(new.encode("utf-8")).decode("ascii")}
+            if sha:
+                body["sha"] = sha
+            try:
+                self._req("PUT", body)
+                return True
+            except urllib.error.HTTPError as e:
+                if e.code not in (409, 422) or attempt == 3:
+                    raise
+        return False
+
+
+GH_NAME = "github.json"   # 토큰이 들어 있어 git 에 올리지 않음 (.gitignore)
+
+
+def load_github(base: Path) -> dict:
+    try:
+        gh = json.loads((base / GH_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return gh if gh.get("token") and gh.get("wiki_repo") else {}
+
+
+def store_for(base: Path, cfg: dict):
+    """깃허브 설정(github.json)이 있으면 깃허브의 군령 파일, 없으면 노트북 위키 폴더의 군령 파일."""
+    gh = load_github(base)
+    if gh:
+        return GitHubStore(gh["wiki_repo"], cfg.get("orders_file", "어제보다 나은 오늘/군령.md"), gh["token"])
+    return LocalStore(orders_path(base, cfg))
+
+
+def github_setup(base: Path, cfg: dict) -> int:
+    """python sangso.py --github-setup — 군령을 깃허브 위키에 바로 적도록 토큰을 등록합니다."""
+    import getpass
+    import urllib.error
+    print("\n=== 군령을 깃허브 위키에 바로 적기 ===")
+    print("깃허브 → Settings → Developer settings → Personal access tokens → Fine-grained tokens 에서")
+    print("  Repository access: my-wiki 하나만 / Permissions: Contents → Read and write  로 토큰을 만드세요.\n")
+    old = load_github(base)
+    repo = input(f"① 위키 저장소 [그냥 Enter 면 {old.get('wiki_repo', 'richdadtechtree/my-wiki')}]: ").strip() \
+        or old.get("wiki_repo", "richdadtechtree/my-wiki")
+    token = getpass.getpass("② 토큰 붙여 넣고 Enter (화면에 안 보이는 게 정상): ").strip() or old.get("token", "")
+    if not (re.fullmatch(r"[\w.-]+/[\w.-]+", repo) and token):
+        print("✗ 저장소 이름이나 토큰이 비었습니다.")
+        return 1
+    store = GitHubStore(repo, cfg.get("orders_file", "어제보다 나은 오늘/군령.md"), token)
+    try:
+        store.read()     # 읽기 시험 (파일이 아직 없으면 빈 글 — 그것도 성공)
+    except urllib.error.HTTPError as e:
+        print(f"✗ 깃허브가 거절했습니다 (HTTP {e.code}). 토큰 권한(my-wiki · Contents 읽기/쓰기)을 확인하세요.")
+        return 1
+    except OSError as e:
+        print(f"✗ 깃허브에 닿지 못했습니다: {e}")
+        return 1
+    path = base / GH_NAME
+    path.write_text(json.dumps({"wiki_repo": repo, "token": token}, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"✓ 저장: {path} (내 컴퓨터에만 두세요)")
+    print(f"이제 군령은 {store.where} 에 적히고, 웹앱·노트북 화면·뮤즈 앱의 체크를 모두 여기서 읽습니다.")
+    return 0
 
 
 # ──────────────────────────────────────────────────────────────
@@ -77,50 +202,64 @@ def _read(path: Path) -> str:
         return ""
 
 
-def add_day(path: Path, day: str, tasks: dict) -> None:
-    """오늘 상소의 군령 2개(today_task)를 '체크 안 됨'으로 적어 둡니다. 같은 날이 이미 있으면 글만 바꾸고 체크는 그대로."""
+def _with_day(text: str, day: str, tasks: dict) -> str | None:
+    """글(text)에 그날 군령 2개를 '체크 안 됨'으로 넣은 새 글. 같은 날이 있으면 글만 바꾸고 체크는 그대로."""
     tasks = {k: tasks.get(f) for k, f in FIELDS.items()}
-    with _lock:
-        text = _read(path) or HEADER
-        lines = [f"- [ ] {TAGS[k]} · {' '.join(str(tasks.get(k) or '').split())}"
-                 for k in ("cc", "life") if tasks.get(k)]
-        if not lines:
-            return
-        old = parse(text).get(day, {})
-        for i, k in enumerate(k for k in ("cc", "life") if tasks.get(k)):
-            if old.get(k, {}).get("done"):
-                lines[i] = lines[i].replace("- [ ]", "- [x]", 1)
-        block = f"## {day}\n" + "\n".join(lines) + "\n"
-        pat = re.compile(rf"^## {re.escape(day)}\s*\n(?:- \[.\].*\n?)*", re.M)
-        if pat.search(text):
-            text = pat.sub(block, text, count=1)
-        else:
-            # 최신 날짜가 위로 오게 머리말 바로 아래에 끼워 넣습니다
-            m = re.search(r"^## \d{4}-\d{2}-\d{2}", text, re.M)
-            text = (text[:m.start()] + block + "\n" + text[m.start():]) if m else text.rstrip("\n") + "\n\n" + block
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+    keys = [k for k in ("cc", "life") if tasks.get(k)]
+    if not keys:
+        return None
+    text = text or HEADER
+    old = parse(text).get(day, {})
+    lines = [f"- [{'x' if old.get(k, {}).get('done') else ' '}] {TAGS[k]} · {' '.join(str(tasks[k]).split())}"
+             for k in keys]
+    block = f"## {day}\n" + "\n".join(lines) + "\n"
+    pat = re.compile(rf"^## {re.escape(day)}\s*\n(?:- \[.\].*\n?)*", re.M)
+    if pat.search(text):
+        new = pat.sub(lambda _m: block, text, count=1)
+    else:
+        # 최신 날짜가 위로 오게 머리말 바로 아래에 끼워 넣습니다
+        m = re.search(r"^## \d{4}-\d{2}-\d{2}", text, re.M)
+        new = (text[:m.start()] + block + "\n" + text[m.start():]) if m else text.rstrip("\n") + "\n\n" + block
+    return None if new == text else new
 
 
-def set_done(path: Path, day: str, key: str, done: bool) -> bool:
-    """체크 하나를 바꿉니다. 그 날짜·꼬리표 줄을 찾지 못하면 False."""
-    with _lock:
-        text = _read(path)
-        sec = re.search(rf"^## {re.escape(day)}\s*\n((?:- \[.\].*\n?)*)", text, re.M)
-        if not sec:
-            return False
-        body = sec.group(1)
-        new_body, n = re.subn(rf"^- \[( |x|X)\] {TAGS[key]} · ", f"- [{'x' if done else ' '}] {TAGS[key]} · ",
-                              body, count=1, flags=re.M)
-        if not n:
-            return False
-        path.write_text(text[:sec.start(1)] + new_body + text[sec.end(1):], encoding="utf-8")
-        return True
+def _with_done(text: str, day: str, key: str, done: bool) -> str | None:
+    """그 날짜·꼬리표 줄의 체크만 바꾼 새 글. 줄이 없으면 None."""
+    sec = re.search(rf"^## {re.escape(day)}\s*\n((?:- \[.\].*\n?)*)", text, re.M)
+    if not sec:
+        return None
+    new_body, n = re.subn(rf"^- \[( |x|X)\] {TAGS[key]} · ", f"- [{'x' if done else ' '}] {TAGS[key]} · ",
+                          sec.group(1), count=1, flags=re.M)
+    if not n:
+        return None
+    return text[:sec.start(1)] + new_body + text[sec.end(1):]
 
 
-def pending_text(path: Path, today: date, days: int = 14) -> str:
+def add_day(store, day: str, tasks: dict) -> None:
+    """오늘 상소의 군령 2개(today_task)를 적어 둡니다."""
+    store.update(lambda t: _with_day(t, day, tasks), f"군령: {day} 상소의 오늘 할 일")
+
+
+def set_done(store, day: str, key: str, done: bool) -> bool:
+    """체크 하나를 바꿉니다. 이미 그 상태면 그대로 True, 그 날짜·꼬리표 줄을 찾지 못하면 False."""
+    if key not in TAGS:
+        return False
+    found = []
+
+    def change(t):
+        found.append(key in parse(t).get(day, {}))
+        return _with_done(t, day, key, done)
+    store.update(change, f"군령: {day} {TAGS[key]} {'완료' if done else '취소'}")
+    return found[-1] if found else False
+
+
+def pending_text(store, today: date, days: int = 14) -> str:
     """제갈량에게 넘길 '아직 못 한 군령'과 '해낸 군령' 목록 (최근 days 일)."""
-    data = parse(_read(path))
+    try:
+        data = parse(store.read())
+    except OSError as e:   # 깃허브에 닿지 못해도 상소는 씀
+        log.warning("군령 장부를 읽지 못함 (%s): %s", store.where, e)
+        return "(군령 장부를 읽지 못했습니다)"
     since = (today - timedelta(days=days)).isoformat()
     todo, done = [], []
     for day in sorted(data, reverse=True):
@@ -136,7 +275,7 @@ def pending_text(path: Path, today: date, days: int = 14) -> str:
 # 서기(書記) 서버 — 상소 화면을 보여 주고, 체크를 받아 파일에 적음
 # ──────────────────────────────────────────────────────────────
 def make_handler(base: Path, cfg: dict):
-    path = orders_path(base, cfg)
+    store = store_for(base, cfg)
 
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *a, **kw):
@@ -156,10 +295,13 @@ def make_handler(base: Path, cfg: dict):
         def do_GET(self):
             u = urlparse(self.path)
             if u.path == "/api/ping":
-                return self._json(200, {"ok": True, "file": str(path)})
+                return self._json(200, {"ok": True, "file": store.where})
             if u.path == "/api/checks":
                 day = (parse_qs(u.query).get("date") or [""])[0]
-                return self._json(200, {k: v["done"] for k, v in parse(_read(path)).get(day, {}).items()})
+                try:
+                    return self._json(200, {k: v["done"] for k, v in parse(store.read()).get(day, {}).items()})
+                except OSError as e:
+                    return self._json(502, {"ok": False, "error": str(e)})
             # 개인 기록이 든 폴더는 보여 주지 않음 (output·assets 만)
             if not (u.path.startswith("/output/") or u.path.startswith("/assets/")):
                 return self.send_error(404)
@@ -178,13 +320,18 @@ def make_handler(base: Path, cfg: dict):
                     raise ValueError("잘못된 값")
             except (ValueError, json.JSONDecodeError) as e:
                 return self._json(400, {"ok": False, "error": str(e)})
-            if not set_done(path, day, key, done):
-                # 그날 줄이 아직 없으면(예전 상소) 상소 기록에서 군령을 꺼내 먼저 적습니다
-                src = base / "archive" / f"{day}.json"
-                if src.exists():
-                    add_day(path, day, json.loads(src.read_text(encoding="utf-8")).get("today_task") or {})
-                    set_done(path, day, key, done)
-            log.info("군령 체크: %s %s → %s (%s)", day, TAGS[key], "완료" if done else "취소", path)
+            try:
+                if not set_done(store, day, key, done):
+                    # 그날 줄이 아직 없으면(예전 상소) 상소 기록에서 군령을 꺼내 먼저 적습니다
+                    src = base / "archive" / f"{day}.json"
+                    if not src.exists():
+                        return self._json(404, {"ok": False, "error": "그날 군령이 장부에 없음"})
+                    add_day(store, day, json.loads(src.read_text(encoding="utf-8")).get("today_task") or {})
+                    set_done(store, day, key, done)
+            except OSError as e:
+                log.warning("군령 체크를 적지 못함 (%s): %s", store.where, e)
+                return self._json(502, {"ok": False, "error": str(e)})
+            log.info("군령 체크: %s %s → %s (%s)", day, TAGS[key], "완료" if done else "취소", store.where)
             return self._json(200, {"ok": True})
 
     return Handler
@@ -205,7 +352,7 @@ def serve(base: Path, cfg: dict) -> None:
     srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(base, cfg))   # 이 컴퓨터 안에서만 들림
     stop = datetime.now().replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=1)
     threading.Timer((stop - datetime.now()).total_seconds(), srv.shutdown).start()
-    log.info("서기 켜짐: http://127.0.0.1:%d  (군령 파일: %s, %s에 꺼짐)", port, orders_path(base, cfg), stop)
+    log.info("서기 켜짐: http://127.0.0.1:%d  (군령 장부: %s, %s에 꺼짐)", port, store_for(base, cfg).where, stop)
     srv.serve_forever()
 
 

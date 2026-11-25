@@ -141,6 +141,25 @@ def _sections(text: str, names: list[str]) -> str:
     return "\n\n".join(out)
 
 
+def pull(root: Path) -> None:
+    """위키가 깃 저장소면, 읽기 전에 깃허브의 최신본을 받습니다.
+    (앱·휴대폰에서 넣은 내용이 노트북에 아직 안 내려왔을 수 있어서. 옵시디언이 꺼져 있는 아침엔 특히)
+    실패해도(인터넷 끊김, 충돌 등) 상소는 지금 있는 위키로 계속 씁니다 → logs/sangso.log 에 이유가 남음."""
+    import subprocess
+    if not (root / ".git").exists():
+        return
+    try:
+        r = subprocess.run(["git", "-C", str(root), "pull", "--ff-only", "--quiet"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=60,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode == 0:
+            log.info("위키 최신본 받음 (git pull)")
+        else:
+            log.warning("위키 git pull 실패 — 지금 있는 위키로 씁니다: %s", (r.stderr or r.stdout).strip()[:300])
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log.warning("위키 git pull 못 함 — 지금 있는 위키로 씁니다: %s", e)
+
+
 def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
     """(제갈량에게 넘길 글, 오늘의 사진, 통계)를 돌려줍니다. 위키가 없으면 빈 글."""
     root = find_dir(cfg.get("wiki_dir", ""))
@@ -148,6 +167,8 @@ def collect(cfg: dict, archive: Path, today: date) -> tuple[str, dict, dict]:
     if not root:
         return "(위키 폴더 없음 — config.json 의 wiki_dir 에 경로를 적으면 함께 읽습니다)", {}, stats
 
+    if cfg.get("wiki_git_pull", True):
+        pull(root)
     prev, prev_day = load_prev_snapshot(archive, today)
     budget = int(cfg.get("wiki_max_chars", 30000))
     since = datetime.now() - timedelta(days=int(cfg.get("wiki_days", 14)))
