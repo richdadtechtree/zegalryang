@@ -1,0 +1,402 @@
+<title>상소문 구조도</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;900&family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 배치: 위에서 아래로 '하루의 흐름'을 따라 읽는 한 장짜리 구조도. 상소문 화면과 같은 한지·먹·주사 색을 씀 */
+:root {
+  --bg: #f3ecdc;          /* 한지 */
+  --surface: #fbf7ee;
+  --ink: #221c16;         /* 먹 */
+  --ink-soft: #5c5045;
+  --line: #d6c9ae;
+  --cinnabar: #a3281c;    /* 주사: 상소문·핵심 */
+  --laptop: #2f5d7c;      /* 노트북 */
+  --laptop-bg: #e3edf3;
+  --cloud: #3c6b3f;       /* 깃허브 my-wiki */
+  --cloud-bg: #e4efe2;
+  --app: #7a4a8c;         /* 웹앱·앱 */
+  --app-bg: #efe6f2;
+  --ai: #a3281c;
+  --ai-bg: #f6e3dc;
+  --display: "Noto Serif KR", "Batang", serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17120e; --surface: #221a14; --ink: #efe6d4; --ink-soft: #b9ab96; --line: #3d3127;
+    --cinnabar: #e0705f; --laptop: #8cc2e6; --laptop-bg: #1b2a35; --cloud: #9bd29c; --cloud-bg: #1c2b1d;
+    --app: #d3a6e6; --app-bg: #2b1f31; --ai: #e0705f; --ai-bg: #33201b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17120e; --surface: #221a14; --ink: #efe6d4; --ink-soft: #b9ab96; --line: #3d3127;
+  --cinnabar: #e0705f; --laptop: #8cc2e6; --laptop-bg: #1b2a35; --cloud: #9bd29c; --cloud-bg: #1c2b1d;
+  --app: #d3a6e6; --app-bg: #2b1f31; --ai: #e0705f; --ai-bg: #33201b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.7 var(--body); }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.35; margin: 0; }
+h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 900; }
+h2 { font-size: 22px; font-weight: 900; margin-bottom: 14px; display: flex; gap: 10px; align-items: baseline; }
+h2 .hj { color: var(--cinnabar); font-size: 16px; letter-spacing: .1em; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; }
+code, .mono { font-family: var(--mono); font-size: .86em; }
+code { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; word-break: break-all; }
+section { margin-top: 56px; }
+.lede { margin-top: 12px; color: var(--ink-soft); max-width: 66ch; }
+.eyebrow { font-size: 12px; letter-spacing: .14em; color: var(--cinnabar); font-weight: 700; margin-bottom: 6px; }
+
+/* 범례 */
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 20px; font-size: 13px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; border: 2px solid; display: inline-block; }
+.k-laptop { --c: var(--laptop); --cbg: var(--laptop-bg); }
+.k-cloud { --c: var(--cloud); --cbg: var(--cloud-bg); }
+.k-app { --c: var(--app); --cbg: var(--app-bg); }
+.k-ai { --c: var(--ai); --cbg: var(--ai-bg); }
+.legend i { border-color: var(--c); background: var(--cbg); }
+
+/* 큰 그림: 재료 → 엔진 → 결과, 그리고 군령의 순환 */
+.diagram { overflow-x: auto; margin-top: 8px; }
+.flow { display: grid; grid-template-columns: minmax(0, 1.15fr) 44px minmax(0, 1fr) 44px minmax(0, 1fr); gap: 0; align-items: stretch; min-width: 0; }
+.col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.col-title { font-size: 12px; letter-spacing: .12em; color: var(--ink-soft); font-weight: 700; }
+.box { border: 2px solid var(--c); background: var(--cbg); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.box h3 { color: var(--c); font-family: var(--body); font-weight: 700; font-size: 14px; }
+.box p, .box li { font-size: 13px; color: var(--ink); }
+.box ul { margin: 4px 0 0; padding-left: 18px; }
+.box .where { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); word-break: break-all; }
+.box.star { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--c); }
+.arrow { display: grid; place-items: center; color: var(--cinnabar); font-size: 26px; font-weight: 700; }
+.engine { justify-content: center; }
+.engine .box { text-align: left; }
+.result-paper { border: 2px solid var(--cinnabar); background: var(--surface); border-radius: 8px; padding: 12px; }
+.result-paper h3 { color: var(--cinnabar); font-family: var(--display); font-weight: 900; font-size: 18px; }
+.result-paper ol { margin: 6px 0 0; padding-left: 20px; font-size: 13px; }
+.loop { margin-top: 18px; border: 2px dashed var(--cinnabar); border-radius: 12px; padding: 16px; position: relative; }
+.loop-label { position: absolute; top: -12px; left: 16px; background: var(--bg); padding: 0 8px; color: var(--cinnabar); font-weight: 700; font-size: 13px; letter-spacing: .06em; }
+.loop-grid { display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1.2fr) 40px minmax(0, 1fr); align-items: center; }
+.ledger { border: 2px solid var(--cloud); background: var(--cloud-bg); border-radius: 8px; padding: 12px; }
+.ledger h3 { color: var(--cloud); font-family: var(--body); font-weight: 700; font-size: 14px; }
+.ledger pre { margin: 8px 0 0; font: 12.5px/1.6 var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow-x: auto; color: var(--ink); }
+.ledger pre b { color: var(--cinnabar); font-weight: 600; }
+.writers { display: flex; flex-direction: column; gap: 8px; }
+.writers .box { padding: 8px 10px; }
+.status { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 0 8px; margin-left: 6px; border: 1px solid currentColor; vertical-align: 1px; }
+.s-done { color: var(--cloud); }
+.s-wip { color: var(--app); }
+.s-opt { color: var(--ink-soft); }
+
+/* 하루 시간표 */
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.timeline li { display: grid; grid-template-columns: 76px 18px minmax(0, 1fr); gap: 12px; }
+.timeline .t { font-family: var(--mono); font-weight: 600; text-align: right; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.timeline .dot { position: relative; }
+.timeline .dot::before { content: ""; position: absolute; left: 7px; top: 0; bottom: 0; width: 2px; background: var(--line); }
+.timeline .dot::after { content: ""; position: absolute; left: 2px; top: 7px; width: 12px; height: 12px; border-radius: 50%; background: var(--c, var(--cinnabar)); border: 2px solid var(--bg); }
+.timeline li:last-child .dot::before { bottom: auto; height: 12px; }
+.timeline .what { padding-bottom: 18px; min-width: 0; }
+.timeline .what p { color: var(--ink-soft); font-size: 14px; }
+
+/* 재료 표 */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 13.5px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; letter-spacing: .08em; color: var(--ink-soft); font-weight: 700; }
+tr:last-child td { border-bottom: 0; }
+td .rank { font-family: var(--display); font-weight: 900; color: var(--cinnabar); }
+
+/* 뮤즈에게 */
+.muse { border: 2px solid var(--app); background: var(--app-bg); border-radius: 12px; padding: 18px; display: grid; gap: 14px; }
+.muse h2 { margin: 0; }
+.rules { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.rules li { padding-left: 4px; }
+.copybar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button { font: 600 13px var(--body); color: var(--app); background: var(--surface); border: 2px solid var(--app); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--cinnabar); outline-offset: 2px; }
+#copy-msg { font-size: 13px; color: var(--ink-soft); }
+.spec { margin: 0; font: 12.5px/1.65 var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; color: var(--ink); max-height: 360px; overflow: auto; }
+
+/* 파일 지도 */
+.files { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.files .box ul { list-style: none; padding: 0; display: grid; gap: 4px; }
+.files .box li { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 8px; }
+.files .box li code { background: transparent; border: 0; padding: 0; }
+.gaps { display: grid; gap: 8px; padding-left: 20px; margin: 0; }
+
+@media (max-width: 760px) {
+  .flow, .loop-grid { grid-template-columns: minmax(0, 1fr); }
+  .arrow { transform: rotate(90deg); height: 34px; }
+  .files { grid-template-columns: minmax(0, 1fr); }
+  .files .box li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .timeline li { grid-template-columns: 54px 18px minmax(0, 1fr); gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">丞相府 · 2026년 11월 25일 기준</p>
+    <h1>제갈량 상소문은 이렇게 돌아갑니다</h1>
+    <p class="lede">매일 아침 노트북이 내 위키(my-wiki)와 클로드 코드 기록을 읽고, 제갈량(Claude)이 1분이면 읽히는 상소를 씁니다. 상소가 내린 군령(오늘 할 일)은 깃허브의 장부 하나에 적히고, 어디서 체크하든 다음 날 상소가 그 결과를 이어받습니다.</p>
+    <div class="legend" aria-label="색 구분">
+      <span class="k-laptop"><i></i>노트북 (내 컴퓨터)</span>
+      <span class="k-cloud"><i></i>깃허브 my-wiki (어디서나 같은 파일)</span>
+      <span class="k-app"><i></i>웹앱·앱 (뮤즈가 만드는 중)</span>
+      <span class="k-ai"><i></i>제갈량 = Claude</span>
+    </div>
+  </header>
+
+  <!-- ───────── 1. 큰 그림 ───────── -->
+  <section aria-labelledby="h-big">
+    <h2 id="h-big"><span class="hj">一</span>큰 그림</h2>
+    <div class="diagram">
+      <div class="flow">
+        <div class="col">
+          <p class="col-title">재료 — 지난 상소 이후 새로 생긴 것 위주</p>
+          <div class="box k-cloud star">
+            <h3>★ my-wiki · 어제보다 나은 오늘/</h3>
+            <ul><li><b>1년 뒤 나에게</b>: 매일 함께 (방향 확인용)</li><li><b>오늘 기분</b>: 새로 적은 줄</li></ul>
+          </div>
+          <div class="box k-cloud star">
+            <h3>★ my-wiki · 코딩/Claude 대화/</h3>
+            <ul><li><b>막혔던 점과 해결 방법</b> → 막힌 일</li><li><b>다음 할 일</b> 체크 안 된 것(7일) → 진행 중</li></ul>
+          </div>
+          <div class="box k-cloud">
+            <h3>my-wiki · 나머지 노트</h3>
+            <p>새로 생기거나 바뀐 줄만. 운동 기록은 최근 1개만.</p>
+          </div>
+          <div class="box k-cloud">
+            <h3>군령 장부</h3>
+            <p>못 한 군령은 다시, 해낸 군령은 다음 단계로.</p>
+          </div>
+          <div class="box k-laptop">
+            <h3>노트북 클로드 코드 기록</h3>
+            <p class="where">~/.claude/projects/</p>
+            <p>지난 상소 이후 새로 입력한 말. 그 전은 짧게.</p>
+          </div>
+          <div class="box k-laptop">
+            <h3>행장 · 지난 상소 7편</h3>
+            <p class="where">profile.md · archive/</p>
+            <p>배경 정보, 그리고 이미 한 말(되풀이 금지).</p>
+          </div>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="col engine">
+          <p class="col-title">엔진 — 매일 6:55</p>
+          <div class="box k-laptop">
+            <h3>sangso.py (노트북 예약 작업)</h3>
+            <ol style="margin:4px 0 0;padding-left:18px;font-size:13px">
+              <li>위키 최신본 받기 (git pull)</li>
+              <li>재료 모으기·거르기</li>
+              <li>제갈량에게 부탁</li>
+              <li>결과 저장, 군령을 장부에 적기</li>
+              <li>7:00 창 띄우기</li>
+            </ol>
+          </div>
+          <div class="box k-ai">
+            <h3>제갈량 = Claude</h3>
+            <p><code>claude -p</code>로 씀 (안 되면 API). 본문은 약 700자, 너무 길면 한 번 줄임.</p>
+          </div>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="col">
+          <p class="col-title">결과 — 아침 7:00</p>
+          <div class="result-paper">
+            <h3>오늘의 상소</h3>
+            <ol>
+              <li>조회 장면: 승상의 한마디, 신하들 대답, 사마의의 반론</li>
+              <li>핵심 1~3개: 막힌 일 · 진행 중 · 마음 · 1년 뒤</li>
+              <li><b>군령 2가지</b>: 道具(코딩) · 大業(삶)</li>
+              <li>오늘의 한 구절</li>
+            </ol>
+          </div>
+          <div class="box k-laptop">
+            <h3>노트북에 남는 것</h3>
+            <p class="where">output/날짜.html · archive/날짜.json · archive/wiki_snap/</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="loop">
+        <span class="loop-label">군령의 순환 — 체크는 어디서 해도 같은 장부로</span>
+        <div class="loop-grid">
+          <div class="writers">
+            <div class="box k-laptop"><h3>노트북 상소 화면 <span class="status s-done">완성</span></h3><p>체크하면 '서기'(127.0.0.1)가 대신 적음</p></div>
+            <div class="box k-app"><h3>웹앱 richdadtechtree.com <span class="status s-wip">제작 중</span></h3><p>휴대폰에서도 체크</p></div>
+            <div class="box k-app"><h3>뮤즈 앱 <span class="status s-wip">제작 중</span></h3></div>
+            <div class="box k-cloud"><h3>옵시디언 직접 체크 <span class="status s-opt">언제든</span></h3></div>
+          </div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="ledger">
+            <h3>my-wiki / 어제보다 나은 오늘/군령.md</h3>
+            <pre>## 2026-11-26
+- [ ] <b>道具</b> · (오늘 새 군령)
+- [ ] <b>大業</b> · (오늘 새 군령)
+
+## 2026-11-25
+- [x] <b>道具</b> · 오류를 통째로 붙여 묻기
+- [ ] <b>大業</b> · 화면 한 장 보내기</pre>
+            <p style="font-size:12.5px;margin-top:8px;color:var(--ink-soft)">맨 위가 최신. 상소가 매일 아침 새 날짜를 위에 끼워 넣음.</p>
+          </div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="box k-ai">
+            <h3>다음 날 상소</h3>
+            <ul><li><b>[ ] 못 한 일</b>: 다시 내리거나 더 작게 쪼갬</li><li><b>[x] 해낸 일</b>: 되풀이하지 않고 다음 단계로</li></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── 2. 하루 시간표 ───────── -->
+  <section aria-labelledby="h-day">
+    <h2 id="h-day"><span class="hj">二</span>하루 시간표</h2>
+    <ol class="timeline">
+      <li class="k-laptop" style="--c:var(--laptop)"><span class="t">06:55</span><span class="dot"></span><div class="what"><h3>예약 작업 시작</h3><p>노트북이 <code>sangso.py --scheduled</code>를 실행. 위키 폴더에서 <code>git pull</code>로 어젯밤·휴대폰에서 바뀐 것을 먼저 받음.</p></div></li>
+      <li style="--c:var(--ai)"><span class="t">06:56</span><span class="dot"></span><div class="what"><h3>재료를 거르고 제갈량에게 부탁</h3><p>지난번에 읽은 위키 상태(스냅숏)와 비교해 바뀐 줄만 고름. 1~4분 걸림.</p></div></li>
+      <li style="--c:var(--cloud)"><span class="t">~06:59</span><span class="dot"></span><div class="what"><h3>군령 2개를 장부에 적음</h3><p>깃허브 <code>군령.md</code> 맨 위에 오늘 날짜로 <code>- [ ]</code> 두 줄. 토큰을 등록하지 않았으면 노트북 위키 폴더에 적음.</p></div></li>
+      <li style="--c:var(--cinnabar)"><span class="t">07:00</span><span class="dot"></span><div class="what"><h3>상소 창이 뜸</h3><p>체크를 받아 적는 '서기'가 함께 켜짐(다음 날 새벽 4시에 꺼짐).</p></div></li>
+      <li style="--c:var(--app)"><span class="t">낮</span><span class="dot"></span><div class="what"><h3>군령을 해내면 체크</h3><p>웹앱, 뮤즈 앱, 노트북 화면, 옵시디언 중 아무 데서나. 모두 같은 장부의 <code>[ ]</code>를 <code>[x]</code>로 바꿈.</p></div></li>
+      <li style="--c:var(--cloud)"><span class="t">밤</span><span class="dot"></span><div class="what"><h3>위키에 하루를 남김</h3><p><code>claude_to_obsidian.py</code>가 클로드 코드 대화를 정리해 <code>코딩/Claude 대화/날짜-claude.md</code>로 저장. 오늘 기분은 직접 적음. 옵시디언 깃 플러그인이 약 10분마다 깃허브에 올림.</p></div></li>
+      <li style="--c:var(--cinnabar)"><span class="t">다음날</span><span class="dot"></span><div class="what"><h3>다시 06:55</h3><p>어제 정리된 막힌 일·다음 할 일·기분, 그리고 군령 체크 결과가 오늘 상소의 재료가 됨.</p></div></li>
+    </ol>
+  </section>
+
+  <!-- ───────── 3. 재료 우선순위 ───────── -->
+  <section aria-labelledby="h-src">
+    <h2 id="h-src"><span class="hj">三</span>제갈량이 읽는 순서</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>순서</th><th>무엇</th><th>어디서</th><th>어떻게 거르나</th></tr></thead>
+        <tbody>
+          <tr><td><span class="rank">1</span></td><td>막힌 일</td><td><code>코딩/Claude 대화/*.md</code><br>'막혔던 점과 해결 방법' 칸</td><td>새로 생긴 정리 노트에서 그 칸만. 이미 해결된 건 짧게, 안 풀린 것 우선.</td></tr>
+          <tr><td><span class="rank">2</span></td><td>진행 중</td><td>같은 노트의 '다음 할 일'</td><td>최근 7일 노트에서 <code>- [ ]</code>(체크 안 된 것)만. 가장 중요한 한 걸음만 짚음.</td></tr>
+          <tr><td><span class="rank">3</span></td><td>오늘 기분</td><td><code>어제보다 나은 오늘/</code></td><td>새로 적은 줄. 상소 첫 문장에서 그 마음을 먼저 알아줌.</td></tr>
+          <tr><td><span class="rank">4</span></td><td>1년 뒤 나에게</td><td><code>어제보다 나은 오늘/</code> (이름에 '1년 뒤')</td><td>바뀌지 않아도 매일 넘김. 오늘 일과 이어질 때만 한 줄.</td></tr>
+          <tr><td><span class="rank">5</span></td><td>군령 장부</td><td><code>어제보다 나은 오늘/군령.md</code></td><td>최근 14일. 못 한 것은 다시 내려도 됨, 해낸 것은 다음 단계로.</td></tr>
+          <tr><td><span class="rank">6</span></td><td>클로드 코드 새 기록</td><td>노트북 <code>~/.claude/projects/</code></td><td>지난 상소 이후 입력한 말. 그 전 것은 배경으로 3천 자만.</td></tr>
+          <tr><td><span class="rank">7</span></td><td>나머지 위키</td><td>건강·육아·가족·투자 등</td><td>새로 생기거나 바뀐 줄만. <code>건강/운동 기록</code>은 최근 1개만.</td></tr>
+          <tr><td><span class="rank">—</span></td><td>되풀이 금지 목록</td><td>지난 상소 7편</td><td>이미 한 주제·구절·사자성어는 다시 쓰지 않음.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ───────── 4. 뮤즈에게 ───────── -->
+  <section aria-labelledby="h-muse">
+    <div class="muse">
+      <h2 id="h-muse"><span class="hj">四</span>뮤즈에게 전달할 약속</h2>
+      <p>웹앱(richdadtechtree.com)과 앱이 이 모양만 지키면 상소와 서로 덮어쓰지 않습니다.</p>
+      <ol class="rules">
+        <li><b>군령 체크</b>: <code>my-wiki</code> 저장소의 <code>어제보다 나은 오늘/군령.md</code>. 맨 위 <code>## 날짜</code> 아래 두 줄을 체크박스로 보여 주고, 체크하면 그 줄의 <code>[ ]</code>↔<code>[x]</code> 한 글자만 바꿉니다.</li>
+        <li><b>저장 방법</b>: GitHub Contents API로 읽을 때 받은 <code>sha</code>를 함께 보내 저장합니다. <code>409</code>가 오면 다시 읽고 다시 고쳐 저장합니다.</li>
+        <li><b>할 일 체크(진행 중)</b>: <code>코딩/Claude 대화/YYYY-MM-DD-claude.md</code>의 <code>## 다음 할 일</code> 아래 <code>- [ ]</code>를 그 자리에서 <code>- [x]</code>로. 칸 제목과 파일 이름의 날짜는 그대로 둡니다.</li>
+        <li><b>오늘 기분 · 1년 뒤 나에게</b>: <code>어제보다 나은 오늘/</code> 폴더에 저장. 기분은 <code>## 날짜</code> 아래에 덧붙이고, 1년 뒤 파일은 이름에 '1년 뒤'를 넣습니다.</li>
+        <li><b>토큰</b>: 깃허브 토큰은 서버 쪽에서만 씁니다. 브라우저 코드에 넣으면 누구나 볼 수 있습니다.</li>
+      </ol>
+      <div class="copybar">
+        <button type="button" id="copy-btn">약속 전문 복사</button>
+        <span id="copy-msg" aria-live="polite"></span>
+      </div>
+      <pre class="spec" id="spec">[제갈량 상소문 ↔ 웹앱·앱 연동 약속]
+
+저장소: richdadtechtree/my-wiki (옵시디언 볼트 = 저장소 루트)
+
+1) 군령 장부 — 어제보다 나은 오늘/군령.md
+   - 상소 프로그램이 매일 아침 맨 위(머리말 바로 아래)에 새 날짜를 끼워 넣음:
+       ## 2026-11-26
+       - [ ] 道具 · (클로드 코드로 할 일)
+       - [ ] 大業 · (삶·사업에서 할 일)
+   - 웹앱·앱은 맨 위 날짜의 두 줄을 체크박스로 보여 줌. (지난 날짜도 보여 주면 좋음)
+   - 체크/해제 = 그 줄의 "[ ]" ↔ "[x]" 한 글자만 바꿈.
+     줄 내용, 꼬리표(道具·大業), "## YYYY-MM-DD" 제목, 줄 순서는 바꾸지 않음.
+   - 저장: GET /repos/richdadtechtree/my-wiki/contents/{경로} 로 content(base64)와 sha 를 받고,
+           PUT 같은 주소에 {message, content(base64), sha} 로 저장.
+           409 가 오면 다시 GET → 다시 고침 → 다시 PUT (최대 3~4번).
+   - 다음 날 상소는 [ ] 는 '못 한 일'(다시 내릴 수 있음), [x] 는 '해낸 일'(다음 단계)로 읽음.
+
+2) 진행 중 — 코딩/Claude 대화/YYYY-MM-DD-claude.md
+   - "## 다음 할 일" 아래 "- [ ]" 줄을 그 자리에서 "- [x]" 로 바꿈.
+   - "## 막혔던 점과 해결 방법", "## 다음 할 일" 제목과 파일 이름의 날짜는 바꾸지 않음.
+   - 상소는 최근 7일 노트의 체크 안 된 것을 '진행 중'으로 읽음.
+
+3) 오늘 기분 · 1년 뒤 나에게 — 어제보다 나은 오늘/
+   - 오늘 기분: "## YYYY-MM-DD" 아래에 한두 줄 덧붙이기 (아래로 쌓기).
+   - 1년 뒤 나에게: 파일 이름에 "1년 뒤" 포함 (예: 1년 뒤 나에게.md).
+
+4) 보안
+   - 깃허브 토큰(Fine-grained, my-wiki · Contents 읽기/쓰기)은 서버 쪽에서만 사용.
+   - 웹앱 군령 화면은 로그인한 나만 볼 수 있게.</pre>
+    </div>
+  </section>
+
+  <!-- ───────── 5. 파일 지도 ───────── -->
+  <section aria-labelledby="h-files">
+    <h2 id="h-files"><span class="hj">五</span>파일 지도</h2>
+    <div class="files">
+      <div class="box k-laptop">
+        <h3>상소문 프로그램 (zegalryang)</h3>
+        <ul>
+          <li><code>sangso.py</code><span>시작점. 순서대로 부름</span></li>
+          <li><code>sangso_lib/wiki.py</code><span>위키에서 바뀐 것만 고르기</span></li>
+          <li><code>sangso_lib/collect.py</code><span>클로드 코드 기록·행장·지난 상소</span></li>
+          <li><code>sangso_lib/orders.py</code><span>군령 장부 읽기·쓰기, 서기</span></li>
+          <li><code>sangso_lib/prompt.py</code><span>제갈량에게 주는 지시문</span></li>
+          <li><code>sangso_lib/engine.py</code><span>Claude 부르기, 길면 줄이기</span></li>
+          <li><code>sangso_lib/render.py</code><span>상소 화면 그리기</span></li>
+          <li><code>config.json</code><span>위키 경로·분량·우선순위 설정</span></li>
+          <li><code>github.json</code><span>깃허브 토큰 (노트북에만, git 제외)</span></li>
+        </ul>
+      </div>
+      <div class="box k-cloud">
+        <h3>내 위키 (my-wiki)</h3>
+        <ul>
+          <li><code>어제보다 나은 오늘/</code><span>1년 뒤 나에게 · 오늘 기분 · 군령.md</span></li>
+          <li><code>코딩/Claude 대화/</code><span>날짜별 클로드 코드 정리 (막힌 일·할 일)</span></li>
+          <li><code>claude_to_obsidian.py</code><span>그 정리 노트를 만드는 스크립트</span></li>
+          <li><code>건강/운동 기록/</code><span>매일 쌓임 → 최근 1개만 읽음</span></li>
+          <li><code>대화/ 육아/ 가족/ 투자/</code><span>바뀐 줄만 읽음</span></li>
+          <li><code>.obsidian/</code><span>옵시디언 설정 → 읽지 않음</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── 6. 남은 일 ───────── -->
+  <section aria-labelledby="h-gaps">
+    <h2 id="h-gaps"><span class="hj">六</span>아직 남은 일</h2>
+    <ol class="gaps">
+      <li>PR을 합친 뒤 노트북에서 새 <code>update.py</code>를 받아 한 번 실행하기</li>
+      <li>노트북 <code>config.json</code>의 <code>wiki_dir</code>에 옵시디언 볼트 경로 적기</li>
+      <li><code>python sangso.py --github-setup</code>으로 깃허브 토큰 등록 (군령을 깃허브에 바로 적기)</li>
+      <li>위키에 <code>어제보다 나은 오늘/</code> 폴더 만들기 (1년 뒤 나에게, 오늘 기분)</li>
+      <li><code>claude_to_obsidian.py</code>가 매일 밤 돌게 하기. 지금 위키의 정리 노트는 11-16이 마지막이라 막힌 일이 최신이 아님</li>
+      <li>뮤즈: 웹앱·앱에 군령 체크 화면 만들기 (위 약속대로)</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+/* 약속 전문 복사: 막히면 글을 선택해 둠 */
+(function () {
+  var btn = document.getElementById("copy-btn"), msg = document.getElementById("copy-msg"), spec = document.getElementById("spec");
+  btn.addEventListener("click", function () {
+    var text = spec.textContent;
+    function fallback() {
+      var r = document.createRange(); r.selectNodeContents(spec);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      msg.textContent = "복사가 막혀 있어 글을 선택해 두었습니다. Ctrl+C로 복사하세요.";
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { msg.textContent = "복사했습니다. 뮤즈에게 붙여 넣으세요."; }, fallback);
+    } catch (e) { fallback(); }
+  });
+})();
+</script>
